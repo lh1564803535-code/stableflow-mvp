@@ -1,0 +1,12 @@
+.chrome-headless/
+.chrome-headless-http/
+output/
+data/
+config/
+*.log
+Thumbs.db
+Desktop.ini
+CLAUDE.md
+terminal-practice/
+__pycache__/
+*.pyc
