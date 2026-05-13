@@ -61,6 +61,7 @@ contract StableFlowEscrow is ReentrancyGuard, Ownable, Pausable {
     // ──── State ────
 
     uint256 public nextOrderId;
+    uint256 public totalEscrowed; // tracks total USDC held in escrow
     mapping(uint256 => Order) public orders;
     mapping(uint256 => mapping(uint256 => Milestone)) public milestones;
 
@@ -81,6 +82,7 @@ contract StableFlowEscrow is ReentrancyGuard, Ownable, Pausable {
     event PlatformFeeUpdated(uint256 oldFee, uint256 newFee);
     event ContractPaused(address indexed by);
     event ContractUnpaused(address indexed by);
+    event EmergencyWithdrawal(address indexed token, address indexed to, uint256 amount);
 
     // ──── Modifiers ────
 
@@ -128,6 +130,22 @@ contract StableFlowEscrow is ReentrancyGuard, Ownable, Pausable {
         emit ContractUnpaused(msg.sender);
     }
 
+    /**
+     * @notice Emergency withdraw only the excess USDC not tracked by escrow.
+     *         This handles cases where tokens are sent directly to the contract
+     *         outside of createOrder (accidental transfers, airdrops, etc).
+     *         Owner cannot touch funds actively held in escrow.
+     */
+    function emergencyWithdraw(address _to) external onlyOwner nonReentrant {
+        require(_to != address(0), "Invalid recipient");
+        uint256 balance = usdc.balanceOf(address(this));
+        uint256 excess = balance - totalEscrowed;
+        require(excess > 0, "No excess funds");
+
+        usdc.safeTransfer(_to, excess);
+        emit EmergencyWithdrawal(address(usdc), _to, excess);
+    }
+
     // ──── Core Functions ────
 
     function createOrder(
@@ -147,6 +165,7 @@ contract StableFlowEscrow is ReentrancyGuard, Ownable, Pausable {
         require(totalPercent == 10000, "Percents must sum to 10000 (100%)");
 
         usdc.safeTransferFrom(msg.sender, address(this), _amount);
+        totalEscrowed += _amount;
 
         orderId = nextOrderId++;
         orders[orderId] = Order({
@@ -367,6 +386,7 @@ contract StableFlowEscrow is ReentrancyGuard, Ownable, Pausable {
         ms.status = MilestoneStatus.Released;
         ms.releasedAt = block.timestamp;
         order.releasedAmount += amount;
+        totalEscrowed -= amount;
 
         emit MilestoneTimeoutRefund(_orderId, _index, amount);
         _checkOrderCompleted(_orderId);
@@ -384,6 +404,7 @@ contract StableFlowEscrow is ReentrancyGuard, Ownable, Pausable {
         ms.status = MilestoneStatus.Released;
         ms.releasedAt = block.timestamp;
         order.releasedAmount += amount;
+        totalEscrowed -= amount;
 
         usdc.safeTransfer(order.seller, sellerAmount);
         if (fee > 0) {
@@ -421,6 +442,7 @@ contract StableFlowEscrow is ReentrancyGuard, Ownable, Pausable {
         ms.status = MilestoneStatus.Released;
         ms.releasedAt = block.timestamp;
         order.releasedAmount += msAmount;
+        totalEscrowed -= msAmount;
 
         emit ResolutionFinalized(_orderId, _index, recipient, recipientAmount, otherAmount);
         _checkOrderCompleted(_orderId);
@@ -439,6 +461,7 @@ contract StableFlowEscrow is ReentrancyGuard, Ownable, Pausable {
         ms.status = MilestoneStatus.Released;
         ms.releasedAt = block.timestamp;
         order.releasedAmount += amount;
+        totalEscrowed -= amount;
 
         emit MilestoneTimeoutRefund(_orderId, _index, amount);
         _checkOrderCompleted(_orderId);
@@ -493,6 +516,11 @@ contract StableFlowEscrow is ReentrancyGuard, Ownable, Pausable {
         return ms.status == MilestoneStatus.Disputed &&
                ms.disputedAt > 0 &&
                block.timestamp >= ms.disputedAt + DISPUTE_TIMEOUT;
+    }
+
+    function getExcessFunds() external view returns (uint256) {
+        uint256 balance = usdc.balanceOf(address(this));
+        return balance > totalEscrowed ? balance - totalEscrowed : 0;
     }
 
     function canFinalizeResolution(uint256 _orderId, uint256 _index) external view returns (bool) {

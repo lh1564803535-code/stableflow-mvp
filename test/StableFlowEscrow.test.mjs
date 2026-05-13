@@ -383,4 +383,98 @@ describe("StableFlowEscrow V4", () => {
       assert.equal(after - before, ethers.parseUnits("242.5", 6));
     });
   });
+
+  describe("Emergency Withdraw", () => {
+    it("tracks totalEscrowed correctly", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      assert.equal(await e.totalEscrowed(), 0n);
+
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [10000]);
+      assert.equal(await e.totalEscrowed(), ORDER_AMOUNT);
+    });
+
+    it("decrements totalEscrowed on release", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await e.connect(buyer).releaseMilestone(0, 0);
+
+      const ms = await e.getMilestone(0, 0);
+      assert.equal(await e.totalEscrowed(), ORDER_AMOUNT - ms.amount);
+    });
+
+    it("shows zero excess when only escrowed funds exist", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [10000]);
+      assert.equal(await e.getExcessFunds(), 0n);
+    });
+
+    it("detects excess when tokens sent directly", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      const extra = ethers.parseUnits("100", 6);
+      await u.connect(buyer).transfer(await e.getAddress(), extra);
+      assert.equal(await e.getExcessFunds(), extra);
+    });
+
+    it("allows owner to withdraw excess", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      const extra = ethers.parseUnits("100", 6);
+      await u.connect(buyer).transfer(await e.getAddress(), extra);
+
+      const before = await u.balanceOf(owner.address);
+      await e.emergencyWithdraw(owner.address);
+      const after = await u.balanceOf(owner.address);
+      assert.equal(after - before, extra);
+    });
+
+    it("rejects withdraw when no excess", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [10000]);
+      await assert.rejects(
+        () => e.emergencyWithdraw(owner.address),
+        /No excess funds/
+      );
+    });
+
+    it("rejects non-owner withdraw", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      const extra = ethers.parseUnits("100", 6);
+      await u.connect(buyer).transfer(await e.getAddress(), extra);
+      await assert.rejects(
+        () => e.connect(buyer).emergencyWithdraw(buyer.address)
+      );
+    });
+
+    it("rejects withdraw to zero address", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      const extra = ethers.parseUnits("100", 6);
+      await u.connect(buyer).transfer(await e.getAddress(), extra);
+      await assert.rejects(
+        () => e.emergencyWithdraw(ethers.ZeroAddress),
+        /Invalid recipient/
+      );
+    });
+
+    it("cannot touch escrowed funds", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [10000]);
+
+      // Send some extra
+      const extra = ethers.parseUnits("50", 6);
+      await u.connect(buyer).transfer(await e.getAddress(), extra);
+
+      // Withdraw only excess
+      const before = await u.balanceOf(owner.address);
+      await e.emergencyWithdraw(owner.address);
+      const after = await u.balanceOf(owner.address);
+      assert.equal(after - before, extra);
+
+      // Escrowed funds still intact
+      assert.equal(await e.totalEscrowed(), ORDER_AMOUNT);
+      assert.equal(await u.balanceOf(await e.getAddress()), ORDER_AMOUNT);
+    });
+  });
 });
