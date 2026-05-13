@@ -1,0 +1,6 @@
+{
+  "app_id": "your-wechat-app-id",
+  "app_secret": "your-wechat-app-secret",
+  "author": "Your Author Name",
+  "thumb_media_id": "replace-with-cover-media-id"
+}

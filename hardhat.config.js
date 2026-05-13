@@ -14,6 +14,7 @@ export default {
       type: "http",
       url: "https://sepolia.base.org",
       chainId: 84532,
+      accounts: process.env.PRIVATE_KEY?.startsWith("0x") ? [process.env.PRIVATE_KEY] : [],
     },
   },
   test: {

@@ -1,13 +1,23 @@
-const STORAGE_KEY = "stableflow-demo-state";
+/* ═══════════════════════════════════════════════════════════════
+   StableFlow V2 — Dark Cyber Theme + i18n
+   ═══════════════════════════════════════════════════════════════ */
+
+const STORAGE_KEY = "stableflow-v2-state";
+
+const CATEGORIES = {
+  design: { label: "Design", icon: "🎨" },
+  development: { label: "Development", icon: "💻" },
+  writing: { label: "Writing", icon: "✍️" },
+  video: { label: "Video", icon: "🎬" },
+  translation: { label: "Translation", icon: "🌐" },
+  other: { label: "Other", icon: "📦" },
+};
+
 const BASE_SEPOLIA = {
   chainId: "0x14A34",
   chainIdDecimal: 84532,
   chainName: "Base Sepolia",
-  nativeCurrency: {
-    name: "ETH",
-    symbol: "ETH",
-    decimals: 18,
-  },
+  nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
   rpcUrls: ["https://sepolia.base.org"],
   blockExplorerUrls: ["https://sepolia.basescan.org"],
 };
@@ -20,178 +30,345 @@ const PAYMENT_RAIL = {
     decimals: 6,
     address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
   },
+  platformFeePercent: 2,
 };
 
+// ──── Contract Config ────
+// After deploying, replace with your actual contract address
+const CONTRACT_ADDRESS = "DEPLOYED_CONTRACT_ADDRESS";
+const CONTRACT_ABI = [
+  "function createOrder(address _seller, uint256 _amount, uint256[] _milestonePercents) external returns (uint256)",
+  "function deliverMilestone(uint256 _orderId, uint256 _index) external",
+  "function releaseMilestone(uint256 _orderId, uint256 _index) external",
+  "function autoReleaseMilestone(uint256 _orderId, uint256 _index) external",
+  "function disputeMilestone(uint256 _orderId, uint256 _index) external",
+  "function resolveDispute(uint256 _orderId, uint256 _index, address _recipient, uint256 _percentToRecipient) external",
+  "function claimTimeoutRefund(uint256 _orderId, uint256 _index) external",
+  "function pause() external",
+  "function unpause() external",
+  "function setArbitrator(address _newArbitrator) external",
+  "function setPlatformWallet(address _newWallet) external",
+  "function arbitrator() external view returns (address)",
+  "function DISPUTE_TIMEOUT() external view returns (uint256)",
+  "function DELIVERY_CONFIRM_TIMEOUT() external view returns (uint256)",
+  "function MIN_ORDER_AMOUNT() external view returns (uint256)",
+  "function canAutoRelease(uint256 _orderId, uint256 _index) external view returns (bool)",
+  "function canClaimTimeoutRefund(uint256 _orderId, uint256 _index) external view returns (bool)",
+  "function getOrder(uint256 _orderId) external view returns (tuple(uint256 id, address buyer, address seller, uint256 totalAmount, uint256 releasedAmount, uint256 milestoneCount, uint256 createdAt, bool completed))",
+  "function getMilestone(uint256 _orderId, uint256 _index) external view returns (tuple(uint256 amount, uint8 status, uint256 deliveredAt, uint256 releasedAt, uint256 disputedAt))",
+  "function getOrderCount() external view returns (uint256)",
+  "event OrderCreated(uint256 indexed orderId, address indexed buyer, address indexed seller, uint256 totalAmount, uint256 milestoneCount)",
+  "event MilestoneDelivered(uint256 indexed orderId, uint256 indexed milestoneIndex, address indexed seller, uint256 timestamp)",
+  "event MilestoneReleased(uint256 indexed orderId, uint256 indexed milestoneIndex, address indexed buyer, uint256 amount, uint256 timestamp)",
+  "event MilestoneAutoReleased(uint256 indexed orderId, uint256 indexed milestoneIndex, uint256 amount)",
+  "event MilestoneDisputed(uint256 indexed orderId, uint256 indexed milestoneIndex, address indexed party, uint256 timestamp)",
+  "event MilestoneResolved(uint256 indexed orderId, uint256 indexed milestoneIndex, address indexed recipient, uint256 recipientAmount, uint256 otherAmount)",
+  "event MilestoneTimeoutRefund(uint256 indexed orderId, uint256 indexed milestoneIndex, uint256 refundAmount)",
+];
+
+let escrowContract = null;
+
+async function getEscrowContract() {
+  if (!window.ethereum) throw new Error("No wallet connected.");
+  if (CONTRACT_ADDRESS === "DEPLOYED_CONTRACT_ADDRESS") {
+    throw new Error("Contract not deployed yet. Please deploy first.");
+  }
+  if (!escrowContract) {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    escrowContract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+  }
+  return escrowContract;
+}
+
+// ─── i18n ────────────────────────────────────────────────────────
+const LANG = {
+  en: {
+    nav_home: "Home",
+    nav_browse: "Browse",
+    nav_sell: "Sell",
+    nav_orders: "Orders",
+    nav_sales: "Sales",
+    network: "Base Sepolia + USDC",
+    eyebrow: "Stablecoin marketplace",
+    hero_title_1: "Buy and sell services with ",
+    hero_title_2: "USDC",
+    hero_title_3: ". Milestone escrow. ",
+    hero_title_4: "Instant release",
+    hero_title_5: ".",
+    hero_text: "StableFlow is a marketplace where freelancers list services and clients pay with USDC. Funds are locked in escrow and released milestone by milestone. No middleman, no 20% fee.",
+    cta_browse: "Browse services",
+    cta_sell: "Sell a service",
+    how_it_works: "How it works",
+    step1_title: "List",
+    step1_desc: "Freelancer creates a service with milestones and price.",
+    step2_title: "Pay",
+    step2_desc: "Client pays USDC. Funds lock in escrow.",
+    step3_title: "Deliver",
+    step3_desc: "Freelancer completes milestones. Client confirms. Funds release.",
+    fee_label: "Fee",
+    fee_desc: "2% platform fee on release. Gas only on Base.",
+    browse_title: "Browse services",
+    filter_all: "All",
+    sell_service: "Sell a service",
+    back_to_browse: "Back to browse",
+    buy_service: "Buy this service",
+    milestones: "Milestones",
+    delivery_steps: "Delivery steps",
+    seller: "Seller",
+    orders_count: "orders",
+    funds_locked: "Funds locked in escrow until milestones are confirmed",
+    platform_fee: "Platform fee (2%)",
+    seller_receives: "Seller receives",
+    create_title: "Create service",
+    service_title_label: "Service title",
+    service_title_placeholder: "e.g. Logo Design for Startups",
+    category_label: "Category",
+    description_label: "Description",
+    description_placeholder: "Describe what you offer, your process, and what the client can expect.",
+    price_label: "Price (USDC)",
+    milestone_section: "Milestones",
+    milestone_total: "Total",
+    milestone_hint: "Percentages must sum to exactly 100%",
+    add_milestone: "+ Add milestone",
+    publish: "Publish service",
+    ms_name: "Name",
+    ms_percent: "Percent",
+    ms_desc: "Description",
+    wallet_required: "Wallet required",
+    connect_wallet: "Connect your wallet to see your orders",
+    connect_wallet_sales: "Connect your wallet to see your sales",
+    connect_wallet_profile: "Connect a wallet or visit a user profile",
+    connect_btn: "Connect Wallet",
+    no_orders: "No orders yet",
+    no_orders_desc: "Browse services and make your first purchase.",
+    no_sales: "No sales yet",
+    no_sales_desc: "Create a service to start receiving orders.",
+    confirm_release: "Confirm Release",
+    dispute: "Dispute",
+    completed: "Completed",
+    mark_delivered: "Mark as Delivered",
+    orders_label: "Buyer",
+    sales_label: "Seller",
+    profile_label: "Account",
+    profile_title: "Profile",
+    services: "Services",
+    as_buyer: "As Buyer",
+    as_seller: "As Seller",
+    listed_services: "Listed Services",
+    no_services: "No services listed.",
+    toast_purchased: "Service purchased! Order created.",
+    toast_delivered: "Milestone marked as delivered.",
+    toast_released: "Milestone released!",
+    toast_disputed: "Milestone disputed.",
+    toast_published: "Service published!",
+    toast_connect: "Connect wallet to continue.",
+    toast_wallet_error: "Connect a wallet first to publish.",
+  },
+  zh: {
+    nav_home: "首页",
+    nav_browse: "浏览",
+    nav_sell: "出售",
+    nav_orders: "订单",
+    nav_sales: "销售",
+    network: "Base Sepolia + USDC",
+    eyebrow: "稳定币服务市场",
+    hero_title_1: "用 ",
+    hero_title_2: "USDC",
+    hero_title_3: " 买卖服务。里程碑托管。 ",
+    hero_title_4: "即时释放",
+    hero_title_5: "。",
+    hero_text: "StableFlow 是一个自由职业者挂服务、客户用 USDC 付款的市场。资金锁定在托管合约中，按里程碑逐步释放。没有中间商，没有 20% 手续费。",
+    cta_browse: "浏览服务",
+    cta_sell: "出售服务",
+    how_it_works: "运作方式",
+    step1_title: "上架",
+    step1_desc: "自由职业者创建服务，设定里程碑和价格。",
+    step2_title: "付款",
+    step2_desc: "客户用 USDC 付款，资金锁定在托管合约中。",
+    step3_title: "交付",
+    step3_desc: "自由职业者完成里程碑，客户确认，资金释放。",
+    fee_label: "手续费",
+    fee_desc: "释放时收取 2% 平台费。Gas 费在 Base 上。",
+    browse_title: "浏览服务",
+    filter_all: "全部",
+    sell_service: "出售服务",
+    back_to_browse: "返回浏览",
+    buy_service: "购买此服务",
+    milestones: "里程碑",
+    delivery_steps: "交付步骤",
+    seller: "卖家",
+    orders_count: "笔订单",
+    funds_locked: "资金锁定在托管中，直到里程碑确认",
+    platform_fee: "平台费 (2%)",
+    seller_receives: "卖家收到",
+    create_title: "创建服务",
+    service_title_label: "服务标题",
+    service_title_placeholder: "例如：初创公司 Logo 设计",
+    category_label: "分类",
+    description_label: "服务描述",
+    description_placeholder: "描述你提供的服务、流程和客户可以期待的结果。",
+    price_label: "价格（USDC）",
+    milestone_section: "里程碑",
+    milestone_total: "合计",
+    milestone_hint: "百分比总和必须等于 100%",
+    add_milestone: "+ 添加里程碑",
+    publish: "发布服务",
+    ms_name: "名称",
+    ms_percent: "百分比",
+    ms_desc: "描述",
+    wallet_required: "需要钱包",
+    connect_wallet: "连接钱包以查看你的订单",
+    connect_wallet_sales: "连接钱包以查看你的销售",
+    connect_wallet_profile: "连接钱包或访问用户资料",
+    connect_btn: "连接钱包",
+    no_orders: "暂无订单",
+    no_orders_desc: "浏览服务并完成你的第一笔购买。",
+    no_sales: "暂无销售",
+    no_sales_desc: "创建服务以开始接收订单。",
+    confirm_release: "确认释放",
+    dispute: "争议",
+    completed: "已完成",
+    mark_delivered: "标记为已交付",
+    orders_label: "买家",
+    sales_label: "卖家",
+    profile_label: "账户",
+    profile_title: "个人资料",
+    services: "服务",
+    as_buyer: "作为买家",
+    as_seller: "作为卖家",
+    listed_services: "已上架服务",
+    no_services: "暂无上架服务。",
+    toast_purchased: "服务已购买！订单已创建。",
+    toast_delivered: "里程碑已标记为已交付。",
+    toast_released: "里程碑已释放！",
+    toast_disputed: "里程碑已争议。",
+    toast_published: "服务已发布！",
+    toast_connect: "请先连接钱包。",
+    toast_wallet_error: "请先连接钱包再发布。",
+  },
+};
+
+let currentLang = localStorage.getItem("stableflow-lang") || "en";
+
+function t(key) {
+  return LANG[currentLang][key] || LANG.en[key] || key;
+}
+
+function toggleLang() {
+  currentLang = currentLang === "en" ? "zh" : "en";
+  localStorage.setItem("stableflow-lang", currentLang);
+  render();
+  showToast(currentLang === "en" ? "Switched to English" : "已切换到中文");
+}
+
+// ─── Seeded Data ─────────────────────────────────────────────────
 const seededState = {
-  invoices: [
+  services: [
     {
-      id: "inv_001",
-      clientName: "Northstar Labs",
-      amount: 1850,
-      token: "USDC",
-      recipientAddress: "0xA4f0000000000000000000000000000000dE91",
-      payerAddress: "0x1Cb90000000000000000000000000000007d77",
-      note: "Fund a fast-response election night design and analytics sprint with routing decisions gated by external market mood and operator review.",
-      dueAt: "2026-04-28",
-      createdAt: "2026-04-23T10:00:00.000Z",
-      status: "paid",
-      categoryLabel: "Marketing",
-      paymentDate: "2026-04-24T08:40:00.000Z",
-      reminderText: "Reminder: Northstar Labs still owes 1,850 USDC, due Apr 28.",
+      id: "svc_001",
+      sellerAddress: "0xA4f0000000000000000000000000000000dE91",
+      title: "Logo Design for Startups",
+      description: "I will design a modern, memorable logo for your startup. Includes 3 initial concepts, unlimited revisions on your chosen concept, and final files in SVG, PNG, and PDF formats. Typical turnaround: 5 days.",
+      category: "design",
+      priceUSDC: 500,
+      milestones: [
+        { name: "Brief & Concepts", percent: 30, description: "I'll send 3 initial logo concepts based on your brand brief." },
+        { name: "Revisions", percent: 40, description: "Up to 3 rounds of revisions on your chosen concept." },
+        { name: "Final Delivery", percent: 30, description: "Final logo files in SVG, PNG, and PDF." },
+      ],
+      examples: [],
+      createdAt: "2026-04-28T10:00:00Z",
+      orderCount: 3,
+    },
+    {
+      id: "svc_002",
+      sellerAddress: "0xDev10000000000000000000000000000009a31",
+      title: "Landing Page Development",
+      description: "I will build a responsive, fast-loading landing page with modern HTML/CSS/JS. Includes mobile optimization, SEO basics, and deployment to your hosting. No framework bloat, pure performance.",
+      category: "development",
+      priceUSDC: 1200,
+      milestones: [
+        { name: "Design Review", percent: 20, description: "Wireframe and visual mockup for your approval." },
+        { name: "Development", percent: 50, description: "Fully coded page with all sections, responsive and tested." },
+        { name: "Deployment", percent: 30, description: "Deploy to your hosting, test all links and forms." },
+      ],
+      examples: [],
+      createdAt: "2026-04-29T14:00:00Z",
+      orderCount: 1,
+    },
+    {
+      id: "svc_003",
+      sellerAddress: "0xMkT2000000000000000000000000000000ba82",
+      title: "Blog Article Writing (1500 words)",
+      description: "I will write a well-researched, SEO-friendly blog article on any tech/business topic. Includes keyword research, outline approval, and one round of revisions. Native English quality.",
+      category: "writing",
+      priceUSDC: 150,
+      milestones: [
+        { name: "Outline", percent: 30, description: "Detailed outline with key points for your approval." },
+        { name: "First Draft", percent: 50, description: "Complete first draft, ready for your review." },
+        { name: "Final Version", percent: 20, description: "Revised version based on your feedback." },
+      ],
+      examples: [],
+      createdAt: "2026-04-30T09:00:00Z",
+      orderCount: 5,
+    },
+    {
+      id: "svc_004",
+      sellerAddress: "0xA4f0000000000000000000000000000000dE91",
+      title: "Smart Contract Audit (Solidity)",
+      description: "I will audit your Solidity smart contract for security vulnerabilities, gas optimization, and best practices. Includes detailed report with severity ratings and fix recommendations.",
+      category: "development",
+      priceUSDC: 2000,
+      milestones: [
+        { name: "Initial Review", percent: 25, description: "First pass review, identify critical issues." },
+        { name: "Deep Analysis", percent: 50, description: "Full audit with detailed findings report." },
+        { name: "Fix Verification", percent: 25, description: "Verify your fixes and issue final sign-off." },
+      ],
+      examples: [],
+      createdAt: "2026-05-01T08:00:00Z",
+      orderCount: 0,
+    },
+  ],
+  orders: [
+    {
+      id: "ord_demo_001",
+      serviceId: "svc_001",
+      buyerAddress: "0x1Cb90000000000000000000000000000007d77",
+      sellerAddress: "0xA4f0000000000000000000000000000000dE91",
+      serviceTitle: "Logo Design for Startups",
+      totalAmount: 500,
+      status: "active",
+      milestoneStatuses: [
+        { index: 0, status: "released", fundedAt: "2026-04-28T12:00:00Z", deliveredAt: "2026-04-29T10:00:00Z", releasedAt: "2026-04-29T14:00:00Z" },
+        { index: 1, status: "delivered", fundedAt: "2026-04-28T12:00:00Z", deliveredAt: "2026-05-01T09:00:00Z", releasedAt: null },
+        { index: 2, status: "funded", fundedAt: "2026-04-28T12:00:00Z", deliveredAt: null, releasedAt: null },
+      ],
+      createdAt: "2026-04-28T12:00:00Z",
       txHash: "0x2eb0b3c1be000000000000000000000000000000000000000000000000000001",
-      networkChainId: BASE_SEPOLIA.chainIdDecimal,
-      paymentRail: "base-sepolia-usdc",
-      milestoneTitle: "Election night liquidity sprint",
-      milestoneSummary: "Fund live design, analytics, and operator coverage first. Route capital only after market heat, ops judgment, and reviewer confidence stop fighting each other.",
-      escrowStatus: "releasable",
-      releaseConfidence: 76,
-      releaseRecommendation: "release",
-      releaseReason: "Market probability stayed constructive, ops saw low execution risk, and treasury can now route with a straight face and a little swagger.",
-      releasedAt: "2026-04-24T09:20:00.000Z",
-    },
-    {
-      id: "inv_002",
-      clientName: "Parcel Forge",
-      amount: 920,
-      token: "USDC",
-      recipientAddress: "0xA4f0000000000000000000000000000000dE91",
-      payerAddress: "",
-      note: "Stage a launch war room for a volatile product reveal and keep routing held until the signal board stops wobbling.",
-      dueAt: "2026-04-30",
-      createdAt: "2026-04-25T02:15:00.000Z",
-      status: "pending",
-      categoryLabel: "Marketing",
-      paymentDate: "",
-      reminderText: "Reminder: Parcel Forge still owes 920 USDC, due Apr 30.",
-      txHash: "",
-      networkChainId: 0,
-      paymentRail: "base-sepolia-usdc",
-      milestoneTitle: "Reveal day operator room",
-      milestoneSummary: "Keep capital unfired until settlement lands and the market mood stops pretending every candle is a prophecy.",
-      escrowStatus: "awaiting_funding",
-      releaseConfidence: 42,
-      releaseRecommendation: "hold",
-      releaseReason: "Settlement has not arrived, so treasury is staying cool instead of chasing vibes.",
-      releasedAt: "",
-    },
-    {
-      id: "inv_003",
-      clientName: "Beacon Studio",
-      amount: 640,
-      token: "USDC",
-      recipientAddress: "0xA4f0000000000000000000000000000000dE91",
-      payerAddress: "",
-      note: "Prepare a rapid QA and operator response loop for a risky prototype window with signal-driven reserve discipline.",
-      dueAt: "2026-04-22",
-      createdAt: "2026-04-18T14:10:00.000Z",
-      status: "overdue",
-      categoryLabel: "QA",
-      paymentDate: "",
-      reminderText: "Beacon Studio is past due on a 640 USDC treasury request tied to QA and response coverage.",
-      txHash: "",
-      networkChainId: 0,
-      paymentRail: "base-sepolia-usdc",
-      milestoneTitle: "Prototype turbulence buffer",
-      milestoneSummary: "This request exists to keep a reserve cushion while the prototype behaves like it had too much espresso.",
-      escrowStatus: "awaiting_funding",
-      releaseConfidence: 34,
-      releaseRecommendation: "hold",
-      releaseReason: "Signal quality is weak, funding is missing, and treasury should absolutely not cosplay as a degen here.",
-      releasedAt: "",
-    },
-  ],
-  payouts: [
-    {
-      id: "pay_001",
-      invoiceId: "inv_001",
-      recipientAddress: "0xDev10000000000000000000000000000009a31",
-      amount: 700,
-      status: "paid",
-      label: "Live ops coverage",
-      createdAt: "2026-04-24T09:30:00.000Z",
-      mode: "fixed",
-    },
-    {
-      id: "pay_002",
-      invoiceId: "inv_001",
-      recipientAddress: "0xMkT2000000000000000000000000000000ba82",
-      amount: 250,
-      status: "paid",
-      label: "Signal dashboard handoff",
-      createdAt: "2026-04-24T09:33:00.000Z",
-      mode: "fixed",
-    },
-  ],
-  signals: [
-    {
-      id: "sig_001",
-      invoiceId: "inv_001",
-      stance: "yes",
-      weight: 3,
-      sourceLabel: "Polymarket snapshot",
-      createdAt: "2026-04-24T08:52:00.000Z",
-    },
-    {
-      id: "sig_002",
-      invoiceId: "inv_001",
-      stance: "yes",
-      weight: 2,
-      sourceLabel: "Ops judgment",
-      createdAt: "2026-04-24T09:04:00.000Z",
-    },
-    {
-      id: "sig_003",
-      invoiceId: "inv_001",
-      stance: "no",
-      weight: 1,
-      sourceLabel: "Reviewer caution",
-      createdAt: "2026-04-24T09:08:00.000Z",
     },
   ],
 };
 
-const walletState = {
-  address: "",
-  chainId: 0,
-  connected: false,
-  busy: false,
-};
-
+// ─── Wallet Utilities ────────────────────────────────────────────
+const walletState = { address: "", chainId: 0, connected: false, busy: false };
 const app = document.getElementById("app");
 const storageFallback = new Map();
 
 function readStoredValue(key) {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return storageFallback.has(key) ? storageFallback.get(key) : null;
-  }
+  try { return window.localStorage.getItem(key); }
+  catch { return storageFallback.has(key) ? storageFallback.get(key) : null; }
 }
 
 function writeStoredValue(key, value) {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    storageFallback.set(key, value);
-  }
+  try { window.localStorage.setItem(key, value); }
+  catch { storageFallback.set(key, value); }
 }
 
 function buildRouteUrl(hash) {
   const url = new URL(window.location.href);
   url.hash = hash.startsWith("#") ? hash : `#${hash}`;
   return url.toString();
-}
-
-function todayStamp() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function getNumericAmount(value) {
-  return Number(value) || 0;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
 }
 
 function shortAddress(address) {
@@ -218,10 +395,7 @@ function amountToTokenUnits(amount, decimals) {
 }
 
 async function rpcRequest(method, params = []) {
-  if (!window.ethereum) {
-    throw new Error("No injected wallet was found. Use MetaMask or another EVM wallet.");
-  }
-
+  if (!window.ethereum) throw new Error("No injected wallet found. Use MetaMask.");
   return window.ethereum.request({ method, params });
 }
 
@@ -233,7 +407,6 @@ async function ensureBaseSepolia() {
       await rpcRequest("wallet_addEthereumChain", [PAYMENT_RAIL.chain]);
       return;
     }
-
     throw error;
   }
 }
@@ -247,1533 +420,852 @@ async function connectWallet() {
   return walletState.address;
 }
 
+// ─── Formatting ──────────────────────────────────────────────────
+function getNumericAmount(value) { return Number(value) || 0; }
+
 function formatCurrency(amount, token = "USDC") {
-  return `${getNumericAmount(amount).toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })} ${token}`;
+  return `${getNumericAmount(amount).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${token}`;
 }
 
 function formatDate(dateString) {
   if (!dateString) return "N/A";
-  return new Date(dateString).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatShortDate(dateString) {
-  if (!dateString) return "N/A";
-  return new Date(dateString).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function formatDateTime(dateString) {
-  if (!dateString) return "N/A";
-  return new Date(dateString).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function categoryFromNote(note) {
-  const lowered = String(note || "").toLowerCase();
-  if (lowered.includes("design")) return "Design";
-  if (lowered.includes("market")) return "Marketing";
-  if (lowered.includes("qa") || lowered.includes("bug")) return "QA";
-  if (lowered.includes("build") || lowered.includes("dev")) return "Development";
-  return "General Ops";
-}
-
-function milestoneTitleFromInvoice(invoice) {
-  const client = String(invoice.clientName || "Client").trim() || "Client";
-  const category = invoice.categoryLabel || categoryFromNote(invoice.note || "");
-  return invoice.milestoneTitle || `${client} ${category} milestone`;
-}
-
-function milestoneSummaryFromInvoice(invoice) {
-  if (invoice.milestoneSummary) return invoice.milestoneSummary;
-  const note = String(invoice.note || "").trim();
-  return note
-    ? `${note} Treasury keeps the request in play until settlement lands, the market mood becomes legible, and an operator explicitly approves the move.`
-    : "Treasury posture stays gated by settlement, signal quality, and one very intentional human click.";
-}
-
-function reminderFromInvoice(invoice) {
-  return `Reminder: ${invoice.clientName} still owes ${formatCurrency(invoice.amount, invoice.token)}, due ${formatShortDate(invoice.dueAt)}. Treasury drama is easier after funding.`;
-}
-
-function deriveInvoiceStatus(invoice) {
-  if (invoice.status === "paid") return "paid";
-  if (!invoice.dueAt) return "pending";
-  return invoice.dueAt < todayStamp() ? "overdue" : "pending";
-}
-
-function getSignalsForInvoice(id, sourceSignals = []) {
-  return sourceSignals.filter((signal) => signal.invoiceId === id);
-}
-
-function confidenceFromSignals(signals, fallback = 42) {
-  if (!signals.length) {
-    return clamp(Math.round(fallback), 0, 100);
-  }
-
-  const yes = signals
-    .filter((signal) => signal.stance === "yes")
-    .reduce((sum, signal) => sum + getNumericAmount(signal.weight), 0);
-  const no = signals
-    .filter((signal) => signal.stance === "no")
-    .reduce((sum, signal) => sum + getNumericAmount(signal.weight), 0);
-  const total = yes + no;
-  if (!total) return clamp(Math.round(fallback), 0, 100);
-  return clamp(Math.round((yes / total) * 100), 0, 100);
-}
-
-function recommendationFromConfidence(confidence, escrowStatus) {
-  if (escrowStatus === "awaiting_funding") {
-    return {
-      recommendation: "hold",
-      reason: "Capital has not landed yet, so treasury should resist the urge to act before the board is even live.",
-    };
-  }
-
-  if (escrowStatus === "funded") {
-    return {
-      recommendation: "hold",
-      reason: "Settlement is real, but treasury still wants cleaner signal alignment before any routing move.",
-    };
-  }
-
-  if (confidence >= 70) {
-    return {
-      recommendation: "release",
-      reason: "Signals are decisively constructive, so treasury can route now without pretending uncertainty is sophistication.",
-    };
-  }
-
-  if (confidence >= 45) {
-    return {
-      recommendation: "partial",
-      reason: "Signals are mixed, so treasury should stage routing and keep reserve posture flexible.",
-    };
-  }
-
-  return {
-    recommendation: "hold",
-    reason: "Signals lean negative, so reserve discipline beats theatrical optimism.",
-  };
-}
-
-function deriveEscrowStatus(invoice) {
-  const confidence = getNumericAmount(invoice.releaseConfidence);
-  const current = invoice.escrowStatus || "";
-
-  if (current === "released") return "released";
-  if (invoice.status !== "paid") return "awaiting_funding";
-  if (current === "funded" && confidence < 45) return "funded";
-  if (confidence >= 70) return "releasable";
-  return "in_review";
-}
-
-function hydrateInvoice(invoice, sourceSignals = []) {
-  const hydrated = {
-    token: PAYMENT_RAIL.token.symbol,
-    payerAddress: "",
-    paymentDate: "",
-    reminderText: "",
-    categoryLabel: categoryFromNote(invoice.note || ""),
-    txHash: "",
-    networkChainId: 0,
-    paymentRail: "base-sepolia-usdc",
-    milestoneTitle: "",
-    milestoneSummary: "",
-    escrowStatus: "awaiting_funding",
-    releaseConfidence: 42,
-    releaseRecommendation: "hold",
-    releaseReason: "Funding has not arrived yet.",
-    releasedAt: "",
-    ...invoice,
-  };
-
-  hydrated.status = deriveInvoiceStatus(hydrated);
-  hydrated.categoryLabel = hydrated.categoryLabel || categoryFromNote(hydrated.note || "");
-  hydrated.milestoneTitle = milestoneTitleFromInvoice(hydrated);
-  hydrated.milestoneSummary = milestoneSummaryFromInvoice(hydrated);
-  hydrated.reminderText = hydrated.reminderText || reminderFromInvoice(hydrated);
-
-  const signals = invoice.id ? getSignalsForInvoice(invoice.id, sourceSignals) : [];
-  const confidence = confidenceFromSignals(signals, hydrated.releaseConfidence);
-  hydrated.releaseConfidence = confidence;
-  hydrated.escrowStatus = deriveEscrowStatus(hydrated);
-  const recommendation = recommendationFromConfidence(confidence, hydrated.escrowStatus);
-  hydrated.releaseRecommendation = hydrated.escrowStatus === "released" ? "release" : recommendation.recommendation;
-  hydrated.releaseReason =
-    hydrated.escrowStatus === "released"
-      ? hydrated.releaseReason || "Release has already been approved and the payout path is now active."
-      : recommendation.reason;
-  if (hydrated.escrowStatus !== "released") {
-    hydrated.releasedAt = "";
-  }
-  return hydrated;
-}
-
-function normalizeState(rawState) {
-  const baseState = {
-    invoices: Array.isArray(rawState.invoices) ? rawState.invoices : [],
-    payouts: Array.isArray(rawState.payouts) ? rawState.payouts : [],
-    signals: Array.isArray(rawState.signals) ? rawState.signals : [],
-  };
-
-  const nextState = {
-    invoices: baseState.invoices,
-    payouts: baseState.payouts.filter((payout) => getNumericAmount(payout.amount) > 0),
-    signals: baseState.signals.filter((signal) => ["yes", "no"].includes(signal.stance)),
-  };
-
-  nextState.invoices = nextState.invoices.map((invoice) => hydrateInvoice(invoice, nextState.signals));
-  return nextState;
-}
-
-function loadState() {
-  const raw = readStoredValue(STORAGE_KEY);
-  if (!raw) {
-    const initialState = normalizeState(structuredClone(seededState));
-    writeStoredValue(STORAGE_KEY, JSON.stringify(initialState));
-    return initialState;
-  }
-
-  try {
-    return normalizeState(JSON.parse(raw));
-  } catch {
-    const initialState = normalizeState(structuredClone(seededState));
-    writeStoredValue(STORAGE_KEY, JSON.stringify(initialState));
-    return initialState;
-  }
-}
-
-let state = loadState();
-
-function saveState() {
-  state = normalizeState(state);
-  writeStoredValue(STORAGE_KEY, JSON.stringify(state));
-}
-
-function getInvoiceById(id) {
-  return state.invoices.find((invoice) => invoice.id === id);
-}
-
-function getPayoutsForInvoice(id) {
-  return state.payouts.filter((payout) => payout.invoiceId === id);
-}
-
-function invoiceRemaining(invoiceId) {
-  const invoice = getInvoiceById(invoiceId);
-  if (!invoice) return 0;
-  const used = getPayoutsForInvoice(invoiceId).reduce((sum, payout) => sum + getNumericAmount(payout.amount), 0);
-  return Math.max(0, getNumericAmount(invoice.amount) - used);
-}
-
-function totalCollectedAmount() {
-  return state.invoices
-    .filter((invoice) => invoice.status === "paid")
-    .reduce((sum, invoice) => sum + getNumericAmount(invoice.amount), 0);
-}
-
-function totalOpenAmount() {
-  return state.invoices
-    .filter((invoice) => invoice.status !== "paid")
-    .reduce((sum, invoice) => sum + getNumericAmount(invoice.amount), 0);
-}
-
-function totalReadyToSplitAmount() {
-  return state.invoices
-    .filter((invoice) => ["releasable", "released"].includes(invoice.escrowStatus))
-    .reduce((sum, invoice) => sum + invoiceRemaining(invoice.id), 0);
-}
-
-function totalFundedEscrowAmount() {
-  return state.invoices
-    .filter((invoice) => invoice.status === "paid")
-    .reduce((sum, invoice) => sum + getNumericAmount(invoice.amount), 0);
-}
-
-function totalReleasedAmount() {
-  return state.invoices
-    .filter((invoice) => invoice.escrowStatus === "released")
-    .reduce((sum, invoice) => sum + getNumericAmount(invoice.amount), 0);
-}
-
-function totalRoutedAmount() {
-  return state.payouts.reduce((sum, payout) => sum + getNumericAmount(payout.amount), 0);
-}
-
-function totalRetainedTreasuryAmount() {
-  return Math.max(0, totalFundedEscrowAmount() - totalRoutedAmount());
-}
-
-function weeklySummary() {
-  const funded = state.invoices.filter((invoice) => invoice.status === "paid");
-  const inReview = state.invoices.filter((invoice) => invoice.escrowStatus === "in_review");
-  const releasable = state.invoices.filter((invoice) => invoice.escrowStatus === "releasable");
-  const released = state.invoices.filter((invoice) => invoice.escrowStatus === "released");
-  const avgConfidence = funded.length
-    ? Math.round(
-        funded.reduce((sum, invoice) => sum + getNumericAmount(invoice.releaseConfidence), 0) / funded.length,
-      )
-    : 0;
-
-  return [
-    `Treasury is holding ${formatCurrency(totalFundedEscrowAmount())} across ${funded.length} live request${funded.length === 1 ? "" : "s"} that already touched the rail.`,
-    `${inReview.length} request${inReview.length === 1 ? " is" : "s are"} still stuck between market excitement and operator caution, with an average signal confidence of ${avgConfidence}%.`,
-    `${releasable.length} routing move${releasable.length === 1 ? " is" : "s are"} unlocked, exposing ${formatCurrency(totalReadyToSplitAmount())} for treasury action instead of wishful thinking.`,
-    `${released.length} approved move${released.length === 1 ? " has" : "s have"} already pushed ${formatCurrency(totalRoutedAmount())} into routing records while ${formatCurrency(totalRetainedTreasuryAmount())} stays back as the adult in the room.`,
-  ];
-}
-
-function averageConfidenceForPaid() {
-  const paid = state.invoices.filter((invoice) => invoice.status === "paid");
-  if (!paid.length) return 0;
-  return Math.round(paid.reduce((sum, invoice) => sum + getNumericAmount(invoice.releaseConfidence), 0) / paid.length);
-}
-
-function highestConfidenceInvoice() {
-  return state.invoices
-    .filter((invoice) => invoice.status === "paid")
-    .sort((a, b) => getNumericAmount(b.releaseConfidence) - getNumericAmount(a.releaseConfidence))[0];
-}
-
-function activeRoute(route) {
-  if (route === "#pay") return "#dashboard";
-  return route;
-}
-
-function syncTopbar(route) {
-  document.querySelectorAll(".nav a").forEach((link) => {
-    const href = link.getAttribute("href");
-    link.classList.toggle("is-active", href === activeRoute(route));
-  });
-}
-
-function paymentProgressMarkup(invoice) {
-  const steps = [
-    {
-      label: "Request framed",
-      complete: Boolean(invoice.id),
-    },
-    {
-      label: "Settlement confirmed",
-      complete: invoice.status === "paid",
-    },
-    {
-      label: "Treasury move unlocked",
-      complete: ["releasable", "released"].includes(invoice.escrowStatus),
-    },
-  ];
-
-  return `
-    <div class="progress-strip">
-      ${steps
-        .map(
-          (step) => `
-            <article class="progress-card ${step.complete ? "is-complete" : ""}">
-              <span class="progress-index">${step.complete ? "Live" : "Primed"}</span>
-              <strong>${step.label}</strong>
-            </article>
-          `,
-        )
-        .join("")}
-    </div>
-  `;
-}
-
-function getEscrowStatusMeta(status) {
-  const map = {
-    awaiting_funding: {
-      label: "Awaiting capital",
-      detail: "The request is framed, but no USDC has entered the reactor yet.",
-    },
-    funded: {
-      label: "Settlement landed",
-      detail: "Capital is real and confirmed, but treasury still wants cleaner signal alignment before moving.",
-    },
-    in_review: {
-      label: "Signal turbulence",
-      detail: "Market heat and operator judgment are still arguing, so treasury is holding posture.",
-    },
-    releasable: {
-      label: "Move unlocked",
-      detail: "Confidence cleared the bar and treasury can now route with intent instead of vibes.",
-    },
-    released: {
-      label: "Move executed",
-      detail: "Treasury approved the action and downstream routing is now live.",
-    },
-  };
-  return map[status] || { label: status, detail: status };
-}
-
-function recommendationMeta(recommendation) {
-  const map = {
-    hold: { label: "Keep reserve", tone: "hold" },
-    partial: { label: "Stage routing", tone: "partial" },
-    release: { label: "Route now", tone: "release" },
-  };
-  return map[recommendation] || { label: recommendation, tone: "hold" };
-}
-
-function signalWeightLabel(weight) {
-  const numeric = getNumericAmount(weight);
-  if (numeric >= 3) return "Loud";
-  if (numeric >= 2) return "Firm";
-  return "Soft";
-}
-
-function getRecentActivity() {
-  const invoiceEvents = state.invoices.flatMap((invoice) => {
-    const events = [
-      {
-        id: `invoice-created-${invoice.id}`,
-        date: invoice.createdAt,
-        title: `${invoice.clientName} request launched`,
-        detail: `${invoice.milestoneTitle} entered the treasury board for ${formatCurrency(invoice.amount, invoice.token)}.`,
-        kind: invoice.status,
-      },
-    ];
-
-    if (invoice.paymentDate) {
-      events.push({
-        id: `invoice-funded-${invoice.id}`,
-        date: invoice.paymentDate,
-        title: `${invoice.clientName} pushed capital on-chain`,
-        detail: `${formatCurrency(invoice.amount, invoice.token)} confirmed on ${PAYMENT_RAIL.chain.chainName}.`,
-        kind: "funded",
-      });
-    }
-
-    if (invoice.releasedAt) {
-      events.push({
-        id: `invoice-released-${invoice.id}`,
-        date: invoice.releasedAt,
-        title: `${invoice.clientName} treasury move approved`,
-        detail: `${getEscrowStatusMeta(invoice.escrowStatus).label} at ${invoice.releaseConfidence}% confidence.`,
-        kind: "released",
-      });
-    }
-
-    return events;
-  });
-
-  const signalEvents = state.signals.map((signal) => {
-    const invoice = getInvoiceById(signal.invoiceId);
-    return {
-      id: `signal-${signal.id}`,
-      date: signal.createdAt,
-      title: `${signal.sourceLabel} injected ${signal.stance === "yes" ? "bullish" : "bearish"} heat`,
-      detail: `${signalWeightLabel(signal.weight)} conviction on ${invoice ? invoice.clientName : signal.invoiceId}.`,
-      kind: signal.stance === "yes" ? "releasable" : "in_review",
-    };
-  });
-
-  const payoutEvents = state.payouts.map((payout) => {
-    const invoice = getInvoiceById(payout.invoiceId);
-    return {
-      id: `payout-${payout.id}`,
-      date: payout.createdAt,
-      title: `${payout.label} routing recorded`,
-      detail: `${formatCurrency(payout.amount)} assigned from ${invoice ? invoice.clientName : payout.invoiceId}.`,
-      kind: "released",
-    };
-  });
-
-  return [...invoiceEvents, ...signalEvents, ...payoutEvents]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 8);
-}
-
-function createStatusChip(status) {
-  const labelMap = {
-    pending: "Awaiting capital",
-    paid: "Settled",
-    overdue: "Overdue",
-    funded: "Settlement landed",
-    awaiting_funding: "Awaiting capital",
-    in_review: "Signal turbulence",
-    releasable: "Move unlocked",
-    released: "Move executed",
-  };
-  return `<span class="status-chip" data-status="${status}">${labelMap[status] || status}</span>`;
+  return new Date(dateString).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function showToast(message) {
   const existing = document.querySelector(".toast");
   if (existing) existing.remove();
-
   const toast = document.createElement("div");
   toast.className = "toast";
   toast.textContent = message;
   document.body.appendChild(toast);
-
-  window.setTimeout(() => {
-    toast.remove();
-  }, 2800);
+  window.setTimeout(() => toast.remove(), 2800);
 }
 
-function render() {
-  state = normalizeState(state);
-  const hash = window.location.hash || "#landing";
-  const [route, queryString] = hash.split("?");
-  const query = new URLSearchParams(queryString || "");
-  syncTopbar(route);
+// ─── State Management ────────────────────────────────────────────
+function loadState() {
+  const raw = readStoredValue(STORAGE_KEY);
+  if (!raw) { const i = structuredClone(seededState); writeStoredValue(STORAGE_KEY, JSON.stringify(i)); return i; }
+  try { return JSON.parse(raw); }
+  catch { const i = structuredClone(seededState); writeStoredValue(STORAGE_KEY, JSON.stringify(i)); return i; }
+}
 
-  switch (route) {
-    case "#create":
-      renderTemplate("create-template");
-      renderCreate(query);
-      break;
-    case "#pay":
-      renderTemplate("pay-template");
-      renderPay(query);
-      break;
-    case "#dashboard":
-      renderTemplate("dashboard-template");
-      renderDashboard();
-      break;
-    default:
-      renderTemplate("landing-template");
-      renderLanding();
-      break;
+let state = loadState();
+function saveState() { writeStoredValue(STORAGE_KEY, JSON.stringify(state)); }
+
+// ─── Queries ─────────────────────────────────────────────────────
+function getServiceById(id) { return state.services.find((s) => s.id === id); }
+function getOrdersForService(serviceId) { return state.orders.filter((o) => o.serviceId === serviceId); }
+function getOrdersByBuyer(address) { return state.orders.filter((o) => o.buyerAddress.toLowerCase() === address.toLowerCase()); }
+function getOrdersBySeller(address) { return state.orders.filter((o) => o.sellerAddress.toLowerCase() === address.toLowerCase()); }
+function getServicesBySeller(address) { return state.services.filter((s) => s.sellerAddress.toLowerCase() === address.toLowerCase()); }
+function getServicesByCategory(category) {
+  if (!category || category === "all") return state.services;
+  return state.services.filter((s) => s.category === category);
+}
+
+// ─── Order Management ────────────────────────────────────────────
+function createOrder(serviceId, buyerAddress) {
+  const service = getServiceById(serviceId);
+  if (!service) return null;
+  const order = {
+    id: `ord_${Date.now()}`,
+    serviceId: service.id,
+    buyerAddress,
+    sellerAddress: service.sellerAddress,
+    serviceTitle: service.title,
+    totalAmount: service.priceUSDC,
+    status: "active",
+    milestoneStatuses: service.milestones.map((_, i) => ({ index: i, status: "funded", fundedAt: new Date().toISOString(), deliveredAt: null, releasedAt: null })),
+    createdAt: new Date().toISOString(),
+  };
+  state.orders.push(order);
+  service.orderCount += 1;
+  saveState();
+  return order;
+}
+
+function deliverMilestone(orderId, milestoneIndex) {
+  const order = state.orders.find((o) => o.id === orderId);
+  if (!order) return false;
+  const ms = order.milestoneStatuses[milestoneIndex];
+  if (!ms || ms.status !== "funded") return false;
+  ms.status = "delivered";
+  ms.deliveredAt = new Date().toISOString();
+  saveState();
+  return true;
+}
+
+function releaseMilestone(orderId, milestoneIndex) {
+  const order = state.orders.find((o) => o.id === orderId);
+  if (!order) return false;
+  const ms = order.milestoneStatuses[milestoneIndex];
+  if (!ms || ms.status !== "delivered") return false;
+  ms.status = "released";
+  ms.releasedAt = new Date().toISOString();
+  if (order.milestoneStatuses.every((m) => m.status === "released")) order.status = "completed";
+  saveState();
+  return true;
+}
+
+function disputeMilestone(orderId, milestoneIndex) {
+  const order = state.orders.find((o) => o.id === orderId);
+  if (!order) return false;
+  const ms = order.milestoneStatuses[milestoneIndex];
+  if (!ms || ms.status !== "delivered") return false;
+  ms.status = "disputed";
+  order.status = "disputed";
+  saveState();
+  return true;
+}
+
+function getMilestoneAmount(order, milestoneIndex) {
+  const service = getServiceById(order.serviceId);
+  if (!service) return 0;
+  const milestone = service.milestones[milestoneIndex];
+  if (!milestone) return 0;
+  return Math.round(order.totalAmount * (milestone.percent / 100));
+}
+
+function getPlatformFee(amount) { return Math.round(amount * (PAYMENT_RAIL.platformFeePercent / 100)); }
+function getSellerReceives(amount) { return amount - getPlatformFee(amount); }
+
+// ─── Buy Service (Contract) ──────────────────────────────────────
+async function buyService(serviceId) {
+  const service = getServiceById(serviceId);
+  if (!service) throw new Error("Service not found.");
+
+  const buyerAddress = await connectWallet();
+  await ensureBaseSepolia();
+
+  const contract = await getEscrowContract();
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
+
+  // 1. Approve USDC
+  const usdcContract = new ethers.Contract(
+    PAYMENT_RAIL.token.address,
+    ["function approve(address spender, uint256 amount) external returns (bool)"],
+    signer
+  );
+  const amount = ethers.parseUnits(service.priceUSDC.toString(), 6);
+  const approveTx = await usdcContract.approve(CONTRACT_ADDRESS, amount);
+  await approveTx.wait();
+
+  // 2. Create order on contract
+  const milestonePercents = service.milestones.map(m => m.percent * 100); // basis points
+  const createTx = await contract.createOrder(service.sellerAddress, amount, milestonePercents);
+  const receipt = await createTx.wait();
+
+  // 3. Get orderId from event
+  let orderId = 0;
+  for (const log of receipt.logs) {
+    try {
+      const parsed = contract.interface.parseLog(log);
+      if (parsed.name === "OrderCreated") {
+        orderId = Number(parsed.args.orderId);
+        break;
+      }
+    } catch {}
   }
+
+  // 4. Save order to localStorage
+  const order = {
+    id: `ord_${Date.now()}`,
+    serviceId: service.id,
+    buyerAddress,
+    sellerAddress: service.sellerAddress,
+    serviceTitle: service.title,
+    totalAmount: service.priceUSDC,
+    contractOrderId: orderId,
+    txHash: createTx.hash,
+    status: "active",
+    milestoneStatuses: service.milestones.map((_, i) => ({
+      index: i,
+      status: "funded",
+      fundedAt: new Date().toISOString(),
+      deliveredAt: null,
+      releasedAt: null,
+    })),
+    createdAt: new Date().toISOString(),
+  };
+
+  state.orders.push(order);
+  service.orderCount += 1;
+  saveState();
+  return order;
 }
 
+// ─── Contract Milestone Functions ─────────────────────────────────
+async function deliverMilestoneFromContract(orderId, milestoneIndex) {
+  const order = state.orders.find(o => o.id === orderId);
+  if (!order) throw new Error("Order not found.");
+  if (order.contractOrderId == null) {
+    // Fallback to local-only if no contract order
+    return deliverMilestone(orderId, milestoneIndex);
+  }
+
+  const contract = await getEscrowContract();
+  const tx = await contract.deliverMilestone(order.contractOrderId, milestoneIndex);
+  await tx.wait();
+
+  const ms = order.milestoneStatuses[milestoneIndex];
+  ms.status = "delivered";
+  ms.deliveredAt = new Date().toISOString();
+  saveState();
+  return true;
+}
+
+async function releaseMilestoneFromContract(orderId, milestoneIndex) {
+  const order = state.orders.find(o => o.id === orderId);
+  if (!order) throw new Error("Order not found.");
+  if (order.contractOrderId == null) {
+    return releaseMilestone(orderId, milestoneIndex);
+  }
+
+  const contract = await getEscrowContract();
+  const tx = await contract.releaseMilestone(order.contractOrderId, milestoneIndex);
+  await tx.wait();
+
+  const ms = order.milestoneStatuses[milestoneIndex];
+  ms.status = "released";
+  ms.releasedAt = new Date().toISOString();
+  if (order.milestoneStatuses.every(m => m.status === "released")) {
+    order.status = "completed";
+  }
+  saveState();
+  return true;
+}
+
+async function autoReleaseMilestoneFromContract(orderId, milestoneIndex) {
+  const order = state.orders.find(o => o.id === orderId);
+  if (!order) throw new Error("Order not found.");
+  if (order.contractOrderId == null) throw new Error("No contract order");
+
+  const contract = await getEscrowContract();
+  const tx = await contract.autoReleaseMilestone(order.contractOrderId, milestoneIndex);
+  await tx.wait();
+
+  const ms = order.milestoneStatuses[milestoneIndex];
+  ms.status = "released";
+  ms.releasedAt = new Date().toISOString();
+  if (order.milestoneStatuses.every(m => m.status === "released")) {
+    order.status = "completed";
+  }
+  saveState();
+  return true;
+}
+
+// ─── Event Listening ──────────────────────────────────────────────
+let eventListenersSetup = false;
+
+async function setupEventListeners() {
+  if (eventListenersSetup || CONTRACT_ADDRESS === "DEPLOYED_CONTRACT_ADDRESS") return;
+  try {
+    const contract = await getEscrowContract();
+    contract.on("MilestoneReleased", (orderId, msIndex, buyer, amount, timestamp) => {
+      showToast(`Milestone ${msIndex} released: ${ethers.formatUnits(amount, 6)} USDC`);
+      render();
+    });
+    contract.on("MilestoneAutoReleased", (orderId, msIndex, amount) => {
+      showToast(`Milestone ${msIndex} auto-released (timeout)`);
+      render();
+    });
+    contract.on("MilestoneResolved", (orderId, msIndex, recipient, recipientAmt, otherAmt) => {
+      showToast(`Dispute resolved for milestone ${msIndex}`);
+      render();
+    });
+    contract.on("MilestoneTimeoutRefund", (orderId, msIndex, refundAmt) => {
+      showToast(`Timeout refund: ${ethers.formatUnits(refundAmt, 6)} USDC`);
+      render();
+    });
+    eventListenersSetup = true;
+  } catch {}
+}
+
+// ─── Template Rendering ──────────────────────────────────────────
 function renderTemplate(templateId) {
   const template = document.getElementById(templateId);
   app.innerHTML = "";
   app.appendChild(template.content.cloneNode(true));
 }
 
+// ─── Router ──────────────────────────────────────────────────────
+function render() {
+  const hash = window.location.hash || "#landing";
+  const [route, queryString] = hash.split("?");
+  const query = new URLSearchParams(queryString || "");
+
+  switch (route) {
+    case "#browse": renderTemplate("browse-template"); renderBrowse(query); break;
+    case "#service": renderTemplate("service-template"); renderServiceDetail(query); break;
+    case "#create": renderTemplate("create-template"); renderCreateService(); break;
+    case "#orders": renderTemplate("orders-template"); renderMyOrders(); break;
+    case "#sales": renderTemplate("sales-template"); renderMySales(); break;
+    case "#profile": renderTemplate("profile-template"); renderProfile(query); break;
+    default: renderTemplate("landing-template"); renderLanding(); break;
+  }
+
+  document.querySelectorAll(".nav a").forEach((link) => {
+    link.classList.toggle("is-active", link.getAttribute("href") === route);
+  });
+  document.querySelectorAll("[data-route-link]").forEach((link) => {
+    const r = link.getAttribute("data-route-link");
+    if (r) link.href = buildRouteUrl(r);
+  });
+
+  // Update language button
+  const langBtn = document.getElementById("lang-btn");
+  if (langBtn) langBtn.textContent = currentLang === "en" ? "中文" : "EN";
+}
+
+// ─── Page: Landing ───────────────────────────────────────────────
 function renderLanding() {
-  const funded = totalFundedEscrowAmount();
-  const reviewQueue = state.invoices.filter((invoice) => ["funded", "in_review"].includes(invoice.escrowStatus)).length;
-  const releaseReady = totalReadyToSplitAmount();
-  const releasedCount = state.invoices.filter((invoice) => invoice.escrowStatus === "released").length;
+  // Update hero title with gradient-text highlights
+  const heroTitle = document.querySelector(".hero h1");
+  if (heroTitle) {
+    heroTitle.innerHTML = `使用 <span class="hl">${t("hero_title_2")}</span> 进行安全交易<br><span class="hl" id="hero-word-rotate"></span> 托管资金`;
+  }
+  const heroText = document.querySelector(".hero-text");
+  if (heroText) heroText.textContent = t("hero_text");
 
-  document.getElementById("hero-total-collected").textContent = formatCurrency(funded);
-  document.getElementById("hero-open-count").textContent = String(reviewQueue);
-  document.getElementById("hero-paid-today").textContent = `${averageConfidenceForPaid()}%`;
-  document.getElementById("hero-ready-to-split").textContent = formatCurrency(releaseReady);
-  document.getElementById("hero-trend").textContent = releasedCount ? `${releasedCount} routing move live` : "Signal reactor warming up";
+  // Initialize animations after DOM is ready
+  requestAnimationFrame(() => initAnimations());
 
-  document.querySelectorAll('[data-route-link]').forEach((link) => {
-    const route = link.getAttribute('data-route-link');
-    if (route) {
-      link.href = buildRouteUrl(route);
-    }
-  });
-}
-
-function renderCreate(query) {
-  const form = document.getElementById("invoice-form");
-  const preview = document.getElementById("invoice-preview");
-  const seedButton = document.getElementById("seed-invoice");
-  const seeded = {
-    clientName: "Northstar Labs",
-    amount: "1850",
-    dueAt: "2026-04-28",
-    recipientAddress: "0xA4f0000000000000000000000000000000dE91",
-    milestoneTitle: "Election night liquidity sprint",
-    note: "Fund rapid design, analytics, and operator coverage for a volatile event window with market-sensitive routing after settlement.",
-  };
-
-  const draftSource = query.get("invoiceId");
-  const draft = draftSource ? getInvoiceById(draftSource) : null;
-  const initial = draft || seeded;
-
-  Object.entries(initial).forEach(([key, value]) => {
-    if (form.elements[key]) {
-      form.elements[key].value = value;
-    }
-  });
-
-  function updatePreview() {
-    const formData = new FormData(form);
-    const invoice = hydrateInvoice({
-      clientName: formData.get("clientName") || "Counterparty / team",
-      amount: getNumericAmount(formData.get("amount")),
-      token: PAYMENT_RAIL.token.symbol,
-      recipientAddress: formData.get("recipientAddress") || "0x...",
-      dueAt: formData.get("dueAt") || new Date().toISOString(),
-      milestoneTitle: formData.get("milestoneTitle") || "Event thesis",
-      note: formData.get("note") || "Treasury intent will appear here.",
-      releaseConfidence: 42,
-      escrowStatus: "awaiting_funding",
-    });
-
-    preview.innerHTML = `
-      <article class="preview-card invoice-spotlight">
-        <div class="invoice-spotlight-head">
-          <div>
-            <p class="card-label">Signal-ready request</p>
-            <h2>${invoice.clientName}</h2>
-          </div>
-          ${createStatusChip(invoice.escrowStatus)}
-        </div>
-        <p class="amount">${formatCurrency(invoice.amount, invoice.token)}</p>
-        <div class="invoice-meta">
-          <span>Event ${invoice.milestoneTitle}</span>
-          <span>Deadline ${formatDate(invoice.dueAt)}</span>
-          <span>Market mood ${invoice.releaseConfidence}%</span>
-          <span>Recipient ${shortAddress(invoice.recipientAddress)}</span>
-        </div>
-        <p>${invoice.milestoneSummary}</p>
-        <div class="preview-flair">
-          <span>Polymarket-style input: primed</span>
-          <span>Reserve posture: cautious</span>
-          <span>Operator fun level: tasteful</span>
-        </div>
-        ${paymentProgressMarkup(invoice)}
-      </article>
-    `;
+  // Update How it works
+  const articles = document.querySelectorAll(".how-it-works-grid article");
+  if (articles.length >= 3) {
+    articles[0].querySelector("strong").textContent = t("step1_title");
+    articles[0].querySelector("p").textContent = t("step1_desc");
+    articles[1].querySelector("strong").textContent = t("step2_title");
+    articles[1].querySelector("p").textContent = t("step2_desc");
+    articles[2].querySelector("strong").textContent = t("step3_title");
+    articles[2].querySelector("p").textContent = t("step3_desc");
   }
 
-  form.addEventListener("input", updatePreview);
-  updatePreview();
+  // Update CTA buttons
+  const ctaBtns = document.querySelectorAll(".hero-actions .button");
+  if (ctaBtns.length >= 2) {
+    ctaBtns[0].textContent = t("cta_browse");
+    ctaBtns[1].textContent = t("cta_sell");
+  }
 
-  seedButton.addEventListener("click", () => {
-    Object.entries(seeded).forEach(([key, value]) => {
-      if (form.elements[key]) form.elements[key].value = value;
-    });
-    updatePreview();
-  });
-
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const formData = new FormData(form);
-    const amount = getNumericAmount(formData.get("amount"));
-    const dueAt = String(formData.get("dueAt") || "");
-    const recipientAddress = String(formData.get("recipientAddress") || "").trim();
-    const clientName = String(formData.get("clientName") || "").trim();
-    const milestoneTitle = String(formData.get("milestoneTitle") || "").trim();
-    const note = String(formData.get("note") || "").trim();
-
-    if (!clientName) {
-      showToast("Add a counterparty or team name.");
-      return;
-    }
-
-    if (amount <= 0) {
-      showToast("Treasury size must be greater than zero.");
-      return;
-    }
-
-    if (!dueAt) {
-      showToast("Choose a decision deadline before launching the request.");
-      return;
-    }
-
-    if (!isAddress(recipientAddress)) {
-      showToast("Recipient wallet must be a valid EVM address.");
-      return;
-    }
-
-    if (!milestoneTitle) {
-      showToast("Add an event thesis.");
-      return;
-    }
-
-    if (!note) {
-      showToast("Add a treasury intent note.");
-      return;
-    }
-
-    const invoice = hydrateInvoice({
-      id: `inv_${Date.now()}`,
-      clientName,
-      amount,
-      token: PAYMENT_RAIL.token.symbol,
-      recipientAddress,
-      payerAddress: "",
-      note,
-      dueAt,
-      createdAt: new Date().toISOString(),
-      status: "pending",
-      categoryLabel: categoryFromNote(note),
-      paymentDate: "",
-      reminderText: "",
-      txHash: "",
-      networkChainId: 0,
-      paymentRail: "base-sepolia-usdc",
-      milestoneTitle,
-      milestoneSummary: `${note} Treasury stays playful in presentation and painfully explicit in control until capital lands and signals clean up.`,
-      escrowStatus: "awaiting_funding",
-      releaseConfidence: 42,
-      releaseRecommendation: "hold",
-      releaseReason: "Capital has not landed yet, so treasury is keeping the confetti cannon holstered.",
-      releasedAt: "",
-    });
-
-    state.invoices.unshift(invoice);
-    saveState();
-    window.location.hash = `#pay?invoiceId=${invoice.id}`;
-  });
-}
-
-function walletStatusMarkup() {
-  const networkOk = walletState.chainId === PAYMENT_RAIL.chain.chainIdDecimal;
-  return `
-    <div class="wallet-status-card">
-      <div class="wallet-badge ${walletState.connected ? "is-on" : "is-off"}">
-        <span class="wallet-dot"></span>
-        ${walletState.connected ? "Wallet connected" : "Wallet disconnected"}
-      </div>
-      <div class="wallet-status-grid">
-        <span>Address ${shortAddress(walletState.address)}</span>
-        <span>Network ${walletState.chainId ? walletState.chainId : "Unknown"}</span>
-        <span>Rail ${PAYMENT_RAIL.chain.chainName}</span>
-        <span>${networkOk ? "Network ready" : "Switch required"}</span>
-      </div>
-    </div>
-  `;
-}
-
-async function payInvoice(invoiceId) {
-  const invoice = getInvoiceById(invoiceId);
-  if (!invoice) throw new Error("Invoice not found.");
-  if (invoice.status === "paid") throw new Error("This work scope is already funded.");
-  if (!isAddress(invoice.recipientAddress)) throw new Error("Recipient address is invalid.");
-
-  walletState.busy = true;
-
-  try {
-    const payerAddress = await connectWallet();
-    await ensureBaseSepolia();
-    const chainHex = await rpcRequest("eth_chainId");
-    walletState.chainId = Number.parseInt(chainHex, 16) || 0;
-
-    const units = amountToTokenUnits(invoice.amount, PAYMENT_RAIL.token.decimals);
-    const data = encodeTransferData(invoice.recipientAddress, units);
-
-    const txHash = await rpcRequest("eth_sendTransaction", [
-      {
-        from: payerAddress,
-        to: PAYMENT_RAIL.token.address,
-        data,
-        value: "0x0",
-      },
-    ]);
-
-    let receipt = null;
-    for (let attempt = 0; attempt < 45; attempt += 1) {
-      receipt = await rpcRequest("eth_getTransactionReceipt", [txHash]);
-      if (receipt) break;
-      await new Promise((resolve) => window.setTimeout(resolve, 2000));
-    }
-
-    if (!receipt || receipt.status !== "0x1") {
-      throw new Error("Transaction was submitted but not confirmed successfully.");
-    }
-
-    invoice.status = "paid";
-    invoice.payerAddress = payerAddress;
-    invoice.paymentDate = new Date().toISOString();
-    invoice.txHash = txHash;
-    invoice.networkChainId = walletState.chainId;
-    invoice.paymentRail = "base-sepolia-usdc";
-    invoice.escrowStatus = "funded";
-    invoice.releaseRecommendation = "hold";
-    invoice.releaseReason = "Settlement is confirmed. Now treasury waits for market mood, reviewer confidence, and one adult decision button.";
-    saveState();
-    return txHash;
-  } finally {
-    walletState.busy = false;
+  // Update fee callout
+  const callout = document.querySelector(".hero-callout");
+  if (callout) {
+    const label = callout.querySelector(".card-label");
+    const desc = callout.querySelector("p:last-child");
+    if (label) label.textContent = t("fee_label");
+    if (desc) desc.textContent = t("fee_desc");
   }
 }
 
-function escrowRailMarkup(invoice) {
-  const meta = getEscrowStatusMeta(invoice.escrowStatus);
-  const recommendation = recommendationMeta(invoice.releaseRecommendation);
-  return `
-    <div class="rail-note escrow-note">
-      <strong>Reactor state</strong>
-      <p>${meta.detail}</p>
-      <div class="rail-details">
-        <span>Status ${meta.label}</span>
-        <span>Market mood ${invoice.releaseConfidence}%</span>
-        <span>Treasury move ${recommendation.label}</span>
-      </div>
-    </div>
-  `;
-}
+// ─── Page: Browse ────────────────────────────────────────────────
+function renderBrowse(query) {
+  const category = query.get("category") || "all";
+  const services = getServicesByCategory(category);
+  const grid = document.getElementById("service-grid");
+  if (!grid) return;
 
-function renderPay(query) {
-  const invoiceId = query.get("invoiceId");
-  const container = document.getElementById("pay-view");
-  const invoice = getInvoiceById(invoiceId);
+  document.querySelectorAll(".category-btn").forEach((btn) => {
+    const cat = btn.dataset.category;
+    btn.classList.toggle("is-active", cat === category);
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      window.location.hash = cat === "all" ? "#browse" : `#browse?category=${cat}`;
+    });
+  });
 
-  if (!invoice) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <h2>Treasury request not found</h2>
-        <p>Create a new request or load the spicy seeded state to continue the demo.</p>
-      </div>
-    `;
+  if (services.length === 0) {
+    grid.innerHTML = `<div class="empty-state"><p>${t("no_orders")}</p></div>`;
     return;
   }
 
-  const isPaid = invoice.status === "paid";
-  const shareLink = buildRouteUrl(`#pay?invoiceId=${invoice.id}`);
-  const txExplorer = invoice.txHash ? `${PAYMENT_RAIL.chain.blockExplorerUrls[0]}/tx/${invoice.txHash}` : "";
+  grid.innerHTML = services.map((service) => {
+    const cat = CATEGORIES[service.category] || CATEGORIES.other;
+    const milestonesPreview = service.milestones.slice(0, 2).map((m) => `<span class="milestone-chip">${m.name}</span>`).join("");
+    return `
+      <a class="service-card" href="#service?id=${service.id}">
+        <div class="service-card-head">
+          <h3>${service.title}</h3>
+          <span class="service-price">${formatCurrency(service.priceUSDC)}</span>
+        </div>
+        <div class="service-meta">
+          <span>${cat.icon} ${cat.label}</span>
+          <span>${shortAddress(service.sellerAddress)}</span>
+          <span>${service.orderCount} ${t("orders_count")}</span>
+        </div>
+        <p class="service-description">${service.description}</p>
+        <div class="milestone-preview">${milestonesPreview}</div>
+      </a>`;
+  }).join("");
+}
+
+// ─── Page: Service Detail ────────────────────────────────────────
+function renderServiceDetail(query) {
+  const serviceId = query.get("id");
+  const service = getServiceById(serviceId);
+  const container = document.getElementById("service-detail-content");
+  if (!container) return;
+
+  if (!service) {
+    container.innerHTML = `<div class="empty-state"><p>Service not found.</p></div>`;
+    return;
+  }
+
+  const cat = CATEGORIES[service.category] || CATEGORIES.other;
+  const milestoneList = service.milestones.map((m, i) => `
+    <div class="milestone-item">
+      <div class="milestone-step is-pending">${i + 1}</div>
+      <div class="milestone-content">
+        <strong>${m.name}</strong>
+        <p>${m.description}</p>
+      </div>
+      <span class="milestone-percent">${m.percent}%</span>
+    </div>`).join("");
+
+  const fee = getPlatformFee(service.priceUSDC);
+  const sellerReceives = getSellerReceives(service.priceUSDC);
 
   container.innerHTML = `
-    <section class="pay-grid enterprise-pay-grid">
-      <article class="pay-card invoice-core">
-        <div class="pay-head">
-          <div>
-            <p class="card-label">Treasury request</p>
-            <h2>${invoice.clientName}</h2>
+    <div class="service-detail-grid">
+      <div class="service-detail-main">
+        <div class="panel">
+          <p class="card-label">${cat.icon} ${cat.label}</p>
+          <h2>${service.title}</h2>
+          <p style="margin-top:12px;line-height:1.7;color:var(--text-secondary);">${service.description}</p>
+        </div>
+        <div class="panel">
+          <p class="card-label">${t("milestones")}</p>
+          <h2>${t("delivery_steps")}</h2>
+          <div class="milestone-list" style="margin-top:16px;">${milestoneList}</div>
+        </div>
+      </div>
+      <div class="service-detail-sidebar">
+        <div class="panel">
+          <p class="card-label">${t("price_label")}</p>
+          <h2 style="font-size:2rem;margin:8px 0;">${formatCurrency(service.priceUSDC)}</h2>
+          <div style="margin:16px 0;font-size:0.85rem;color:var(--text-secondary);">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+              <span>${t("platform_fee")}</span><span>${formatCurrency(fee)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+              <span>${t("seller_receives")}</span><span>${formatCurrency(sellerReceives)}</span>
+            </div>
           </div>
-          ${createStatusChip(invoice.escrowStatus)}
+          <button class="button button-primary" style="width:100%;margin-top:12px;" id="buy-btn">${t("buy_service")}</button>
+          <p style="margin-top:12px;font-size:0.75rem;color:var(--text-muted);text-align:center;">${t("funds_locked")}</p>
         </div>
-        <p class="amount">${formatCurrency(invoice.amount, invoice.token)}</p>
-        <div class="pill-row">
-          <span class="pill">${invoice.categoryLabel}</span>
-          <span class="pill">Event ${invoice.milestoneTitle}</span>
-          <span class="pill">Deadline ${formatShortDate(invoice.dueAt)}</span>
+        <div class="panel">
+          <p class="card-label">${t("seller")}</p>
+          <div style="margin-top:8px;font-family:var(--font-mono);font-size:0.85rem;color:var(--text-secondary);word-break:break-all;">${service.sellerAddress}</div>
+          <div style="margin-top:12px;font-size:0.85rem;color:var(--text-muted);">${service.orderCount} ${t("orders_count")}</div>
         </div>
-        <p>${invoice.milestoneSummary}</p>
-        <div class="invoice-meta">
-          <span>Recipient ${shortAddress(invoice.recipientAddress)}</span>
-          <span>Market mood ${invoice.releaseConfidence}%</span>
-          <span>Treasury move ${recommendationMeta(invoice.releaseRecommendation).label}</span>
-          <span>Request ID ${invoice.id}</span>
-        </div>
-        ${paymentProgressMarkup(invoice)}
-        <div class="link-card">
-          <code>${shareLink}</code>
-          <button class="button button-secondary" id="copy-link">Copy link</button>
-        </div>
-        ${
-          invoice.txHash
-            ? `
-              <div class="rail-proof">
-                <p class="card-label">Settlement proof</p>
-                <div class="rail-proof-row">
-                  <span>${shortAddress(invoice.txHash)}</span>
-                  <a class="button button-secondary" href="${txExplorer}" target="_blank" rel="noreferrer">View transaction</a>
-                </div>
-              </div>
-            `
-            : ""
-        }
-      </article>
+      </div>
+    </div>`;
 
-      <aside class="pay-card rail-card">
-        <div class="rail-card-head">
-          <div>
-            <p class="card-label">Real settlement rail</p>
-            <h2>Feed the signal cockpit with real USDC</h2>
-          </div>
-          <span class="rail-token">${PAYMENT_RAIL.token.symbol}</span>
-        </div>
-        <p class="supporting">
-          This still uses an injected EVM wallet and submits a real ERC-20 transfer. The fun part starts after settlement, when treasury uses market-style signals to decide whether to hold, stage, or route.
-        </p>
-        ${walletStatusMarkup()}
-        <ul class="timeline">
-          <li>Connect wallet and switch to Base Sepolia.</li>
-          <li>Push real USDC into the treasury reactor.</li>
-          <li>Let the signal board bully treasury into a clearer decision.</li>
-        </ul>
-        <div class="settlement-matrix">
-          <article>
-            <span>Event thesis</span>
-            <strong>${invoice.milestoneTitle}</strong>
-          </article>
-          <article>
-            <span>Capital entering rail</span>
-            <strong>${formatCurrency(invoice.amount, invoice.token)}</strong>
-          </article>
-          <article>
-            <span>Proof mode</span>
-            <strong>On-chain receipt</strong>
-          </article>
-        </div>
-        ${escrowRailMarkup(invoice)}
-        <div class="pay-actions">
-          <button class="button button-secondary" id="connect-wallet">Connect wallet</button>
-          <button class="button button-primary" id="pay-action" ${isPaid ? "disabled" : ""}>
-            ${isPaid ? "Settlement confirmed" : `Settle ${formatCurrency(invoice.amount, invoice.token)}`}
-          </button>
-        </div>
-        <div class="rail-note">
-          <strong>Demo note</strong>
-          <p>Settlement is real on testnet. The signal theatre, reserve posture, and routing logic are intentionally product-layer MVP pieces.</p>
-        </div>
-      </aside>
-    </section>
-  `;
-
-  document.getElementById("copy-link").addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(shareLink);
-      showToast("Signal-aware request link copied.");
-    } catch {
-      showToast("Clipboard access unavailable in this browser.");
-    }
-  });
-
-  document.getElementById("connect-wallet").addEventListener("click", async () => {
-    try {
-      await connectWallet();
-      renderPay(new URLSearchParams(`invoiceId=${invoice.id}`));
-      showToast("Wallet connected. Reactor online.");
-    } catch (error) {
-      showToast(error.message || "Wallet connection failed.");
-    }
-  });
-
-  const payButton = document.getElementById("pay-action");
-  if (!payButton.disabled) {
-    payButton.addEventListener("click", async () => {
-      payButton.disabled = true;
-      payButton.textContent = "Waiting for wallet confirmation";
-
+  const buyBtn = document.getElementById("buy-btn");
+  if (buyBtn) {
+    buyBtn.addEventListener("click", async () => {
+      buyBtn.disabled = true;
+      buyBtn.textContent = "Processing...";
       try {
-        await payInvoice(invoice.id);
-        showToast("Settlement confirmed on-chain.");
-        renderPay(new URLSearchParams(`invoiceId=${invoice.id}`));
-        window.setTimeout(() => {
-          window.location.hash = "#dashboard";
-        }, 900);
-      } catch (error) {
-        payButton.disabled = false;
-        payButton.textContent = `Settle ${formatCurrency(invoice.amount, invoice.token)}`;
-        showToast(error.message || "Payment failed.");
+        await buyService(service.id);
+        showToast(t("toast_purchased"));
+        window.location.hash = "#orders";
+      } catch (err) {
+        showToast(err.message || "Payment failed.");
+        buyBtn.disabled = false;
+        buyBtn.textContent = t("buy_service");
       }
     });
   }
 }
 
-function renderDashboard() {
-  renderOpsSpotlight();
-  renderStats();
-  renderTreasury();
-  renderOpenInvoices();
-  renderPaidInvoices();
-  renderSummary();
-  renderActivity();
-  renderSplitForm();
-  renderPayouts();
-}
+// ─── Page: Create Service ────────────────────────────────────────
+function renderCreateService() {
+  const form = document.getElementById("create-service-form");
+  const milestoneContainer = document.getElementById("milestone-form-list");
+  const addMilestoneBtn = document.getElementById("add-milestone-btn");
+  const percentDisplay = document.getElementById("milestone-total-percent");
+  if (!form) return;
 
-function renderOpsSpotlight() {
-  const container = document.getElementById("ops-spotlight");
-  const fundedCount = state.invoices.filter((invoice) => invoice.status === "paid").length;
-  const reviewCount = state.invoices.filter((invoice) => invoice.escrowStatus === "in_review").length;
-  const releasableCount = state.invoices.filter((invoice) => invoice.escrowStatus === "releasable").length;
-  const bestInvoice = highestConfidenceInvoice();
-  const opsSignal = releasableCount
-    ? "Routing window opening"
-    : reviewCount
-      ? "Signal turbulence active"
-      : fundedCount
-        ? "Capital landed, waiting for conviction"
-        : "Cockpit waiting for first live settlement";
+  let milestoneCount = 0;
 
-  container.innerHTML = `
-    <section class="ops-spotlight panel">
-      <div class="ops-spotlight-copy">
-        <p class="card-label">Treasury pulse</p>
-        <h2>${opsSignal}</h2>
-        <p>
-          StableFlow now behaves like a strategy room: real settlement enters first, market-style signals make things interesting, and AI turns the noise into a treasury memo that still ends with a human click.
-        </p>
-      </div>
-      <div class="ops-spotlight-grid">
-        <article class="ops-pulse-card">
-          <span>Capital on board</span>
-          <strong>${formatCurrency(totalFundedEscrowAmount())}</strong>
-          <small>${fundedCount} funded request${fundedCount === 1 ? " is" : "s are"} already inside the signal reactor.</small>
-        </article>
-        <article class="ops-pulse-card">
-          <span>Drama queue</span>
-          <strong>${reviewCount}</strong>
-          <small>${reviewCount ? "Signals are still messy, so treasury is refusing to confuse excitement with policy." : "Nothing is theatrically undecided right now."}</small>
-        </article>
-        <article class="ops-pulse-card">
-          <span>Hottest read</span>
-          <strong>${bestInvoice ? `${bestInvoice.releaseConfidence}%` : "0%"}</strong>
-          <small>${bestInvoice ? `${bestInvoice.clientName} currently has the cleanest case for a routing move.` : "Fund a request to let the market mood get loud."}</small>
-        </article>
-      </div>
-    </section>
-  `;
-}
-
-function renderStats() {
-  const pending = state.invoices.filter((invoice) => invoice.status === "pending");
-  const overdue = state.invoices.filter((invoice) => invoice.status === "overdue");
-  const funded = state.invoices.filter((invoice) => invoice.escrowStatus === "funded");
-  const releasable = state.invoices.filter((invoice) => invoice.escrowStatus === "releasable");
-  const receivables = pending.reduce((sum, invoice) => sum + getNumericAmount(invoice.amount), 0);
-
-  document.getElementById("stats-row").innerHTML = `
-    <article class="stat-card emphasis-card">
-      <p class="card-label">Capital landed</p>
-      <div class="stat-value">${formatCurrency(totalFundedEscrowAmount())}</div>
-      <p class="supporting">Real on-chain settlement is already giving the demo weight.</p>
-    </article>
-    <article class="stat-card">
-      <p class="card-label">Dry powder waiting</p>
-      <div class="stat-value">${formatCurrency(receivables)}</div>
-      <p class="supporting">${pending.length} request(s) still need capital before the fun begins.</p>
-    </article>
-    <article class="stat-card">
-      <p class="card-label">Reserve posture</p>
-      <div class="stat-value">${funded.length}</div>
-      <p class="supporting">${funded.length} funded request(s) are being held while treasury demands cleaner signals.</p>
-    </article>
-    <article class="stat-card">
-      <p class="card-label">Routing unlocked</p>
-      <div class="stat-value">${formatCurrency(totalReadyToSplitAmount())}</div>
-      <p class="supporting">${releasable.length} move(s) are ready for explicit treasury action.</p>
-    </article>
-    <article class="stat-card">
-      <p class="card-label">Chaos meter</p>
-      <div class="stat-value">${overdue.length}</div>
-      <p class="supporting">${overdue.length ? "Some requests are late, cranky, and not yet worthy of capital." : "No overdue chaos in the queue right now."}</p>
-    </article>
-  `;
-}
-
-function renderTreasury() {
-  const container = document.getElementById("treasury-panel");
-  container.innerHTML = `
-    <div class="treasury-grid treasury-grid-wide">
-      <article class="treasury-card">
-        <span>Capital on rail</span>
-        <strong>${formatCurrency(totalFundedEscrowAmount())}</strong>
-        <small>Real Base Sepolia settlement already confirmed by wallet-triggered ERC-20 transfers.</small>
-      </article>
-      <article class="treasury-card">
-        <span>Routing potential</span>
-        <strong>${formatCurrency(totalReadyToSplitAmount())}</strong>
-        <small>Capital currently unlocked by signal quality and explicit treasury approval.</small>
-      </article>
-      <article class="treasury-card">
-        <span>Moves already routed</span>
-        <strong>${formatCurrency(totalRoutedAmount())}</strong>
-        <small>Value assigned downstream after treasury decided to stop being shy.</small>
-      </article>
-      <article class="treasury-card">
-        <span>Adult supervision reserve</span>
-        <strong>${formatCurrency(totalRetainedTreasuryAmount())}</strong>
-        <small>Funded balance still retained after routing, because not every signal deserves obedience.</small>
-      </article>
-    </div>
-  `;
-}
-
-function renderOpenInvoices() {
-  const container = document.getElementById("open-invoices");
-  const reviewQueue = state.invoices.filter((invoice) => invoice.escrowStatus !== "released");
-
-  if (!reviewQueue.length) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <h3>No request is waiting</h3>
-        <p>Create a treasury request to bring the signal cockpit back to life.</p>
-      </div>
-    `;
-    return;
+  function addMilestone(name = "", percent = "", description = "") {
+    milestoneCount++;
+    const id = milestoneCount;
+    const item = document.createElement("div");
+    item.className = "milestone-form-item";
+    item.dataset.id = id;
+    item.innerHTML = `
+      <label>${t("ms_name")}<input name="ms_name_${id}" placeholder="e.g. Design Review" value="${name}" required /></label>
+      <label>${t("ms_percent")}<input name="ms_percent_${id}" type="number" min="1" max="100" placeholder="30" value="${percent}" required /></label>
+      <div>
+        <label>${t("ms_desc")}<input name="ms_desc_${id}" placeholder="What this step includes" value="${description}" /></label>
+        <button type="button" class="remove-milestone" style="margin-top:8px;">Remove</button>
+      </div>`;
+    item.querySelector(".remove-milestone").addEventListener("click", () => { item.remove(); updatePercentTotal(); });
+    item.querySelectorAll("input").forEach((inp) => inp.addEventListener("input", updatePercentTotal));
+    milestoneContainer.appendChild(item);
+    updatePercentTotal();
   }
 
-  container.innerHTML = `
-    <div class="invoice-list">
-      ${reviewQueue
-        .map((invoice) => {
-          const recommendation = recommendationMeta(invoice.releaseRecommendation);
-          return `
-            <article class="invoice-card ledger-card">
-              <div class="invoice-head">
-                <div>
-                  <h3>${invoice.clientName}</h3>
-                  <p class="supporting">${invoice.milestoneTitle}</p>
-                </div>
-                ${createStatusChip(invoice.escrowStatus)}
-              </div>
-              <p class="amount">${formatCurrency(invoice.amount, invoice.token)}</p>
-              <div class="invoice-meta">
-                <span>Deadline ${formatDate(invoice.dueAt)}</span>
-                <span>Market mood ${invoice.releaseConfidence}%</span>
-                <span>Move ${recommendation.label}</span>
-                <span>${invoice.status === "paid" ? "Capital confirmed" : invoice.reminderText}</span>
-              </div>
-              <p class="supporting">${invoice.releaseReason}</p>
-              <div class="invoice-actions">
-                <a class="button button-primary" href="${buildRouteUrl(`#pay?invoiceId=${invoice.id}`)}">Open settlement rail</a>
-                <a class="button button-secondary" href="${buildRouteUrl(`#create?invoiceId=${invoice.id}`)}">Remix request</a>
-              </div>
-            </article>
-          `;
-        })
-        .join("")}
-    </div>
-  `;
-}
-
-function renderPaidInvoices() {
-  const container = document.getElementById("paid-invoices");
-  const fundedInvoices = state.invoices.filter((invoice) => invoice.status === "paid");
-
-  if (!fundedInvoices.length) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <h3>No capital on board yet</h3>
-        <p>Use the settlement reactor to submit a real Base Sepolia USDC transfer.</p>
-      </div>
-    `;
-    return;
+  function updatePercentTotal() {
+    let total = 0;
+    milestoneContainer.querySelectorAll("[name^='ms_percent_']").forEach((inp) => { total += Number(inp.value) || 0; });
+    if (percentDisplay) {
+      percentDisplay.textContent = `${total}%`;
+      percentDisplay.style.color = total === 100 ? "var(--success)" : total > 100 ? "var(--danger)" : "inherit";
+    }
   }
 
-  container.innerHTML = `
-    <div class="invoice-list">
-      ${fundedInvoices
-        .map((invoice) => `
-          <article class="invoice-card ledger-card paid-card">
-            <div class="invoice-head">
-              <div>
-                <h3>${invoice.clientName}</h3>
-                <p class="supporting">Settled ${formatDateTime(invoice.paymentDate || invoice.createdAt)}</p>
-              </div>
-              ${createStatusChip(invoice.escrowStatus)}
-            </div>
-            <p class="amount">${formatCurrency(invoice.amount, invoice.token)}</p>
-            <div class="invoice-meta">
-              <span>Payer ${shortAddress(invoice.payerAddress || "")}</span>
-              <span>Reserve left ${formatCurrency(invoiceRemaining(invoice.id), invoice.token)}</span>
-              <span>Signal mood ${invoice.releaseConfidence}%</span>
-              <span>${invoice.txHash ? shortAddress(invoice.txHash) : "Seeded settlement"}</span>
-            </div>
-            <p class="supporting">${invoice.releaseReason}</p>
-          </article>
-        `)
-        .join("")}
-    </div>
-  `;
-}
+  addMilestoneBtn.addEventListener("click", () => addMilestone());
+  addMilestone("Brief & Concepts", "30", "Initial concepts based on your brief.");
+  addMilestone("Final Delivery", "70", "Final deliverables.");
 
-function renderSummary() {
-  const container = document.getElementById("summary-panel");
-  const focus = highestConfidenceInvoice();
-  const recommendation = focus ? recommendationMeta(focus.releaseRecommendation) : null;
-
-  container.innerHTML = `
-    <div class="summary-box summary-shell">
-      <p>
-        AI is not touching the funds. It is translating market heat, settlement posture, and routing tension into a memo that a finance lead can actually act on.
-      </p>
-      ${
-        focus
-          ? `
-            <div class="ai-callout ${recommendation ? `is-${recommendation.tone}` : ""}">
-              <span>Operator focus</span>
-              <strong>${focus.clientName} — ${focus.milestoneTitle}</strong>
-              <p>${focus.releaseReason}</p>
-            </div>
-          `
-          : ""
-      }
-      <ul class="summary-list">
-        ${weeklySummary()
-          .map((line) => `<li>${line}</li>`)
-          .join("")}
-      </ul>
-    </div>
-  `;
-}
-
-function releaseInvoice(invoiceId) {
-  const invoice = getInvoiceById(invoiceId);
-  if (!invoice) return;
-  invoice.escrowStatus = "released";
-  invoice.releasedAt = new Date().toISOString();
-  invoice.releaseRecommendation = "release";
-  invoice.releaseReason = "Treasury approved the move. Routing can now happen with full signal receipts and zero fake drama.";
-  saveState();
-}
-
-function renderActivity() {
-  const container = document.getElementById("activity-panel");
-  const fundedInvoices = state.invoices.filter((invoice) => invoice.status === "paid");
-  const activity = getRecentActivity();
-  const signalForms = fundedInvoices.length
-    ? fundedInvoices
-        .map((invoice) => {
-          const latestSignals = getSignalsForInvoice(invoice.id)
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .slice(0, 3);
-          return `
-            <article class="signal-entry-card">
-              <div class="invoice-head">
-                <div>
-                  <h3>${invoice.clientName}</h3>
-                  <p class="supporting">${invoice.milestoneTitle}</p>
-                </div>
-                ${createStatusChip(invoice.escrowStatus)}
-              </div>
-              <div class="signal-score-row">
-                <strong>${invoice.releaseConfidence}% confidence</strong>
-                <span>${recommendationMeta(invoice.releaseRecommendation).label}</span>
-              </div>
-              <form class="signal-form" data-invoice-id="${invoice.id}">
-                <div class="signal-form-grid">
-                  <label>
-                    Signal source
-                    <input name="sourceLabel" placeholder="Polymarket snapshot" required />
-                  </label>
-                  <label>
-                    Conviction
-                    <select name="weight">
-                      <option value="1">Whisper</option>
-                      <option value="2" selected>Firm nod</option>
-                      <option value="3">Table slam</option>
-                    </select>
-                  </label>
-                </div>
-                <div class="signal-actions">
-                  <button class="button button-secondary" type="submit" name="stance" value="no">Add bearish heat</button>
-                  <button class="button button-primary" type="submit" name="stance" value="yes">Add bullish heat</button>
-                </div>
-              </form>
-              <div class="signal-log">
-                ${
-                  latestSignals.length
-                    ? latestSignals
-                        .map(
-                          (signal) => `
-                            <div class="signal-log-item">
-                              <span>${signal.sourceLabel}</span>
-                              <strong>${signal.stance === "yes" ? "BULLISH" : "BEARISH"} · ${signalWeightLabel(signal.weight)}</strong>
-                            </div>
-                          `,
-                        )
-                        .join("")
-                    : '<p class="supporting">No market heat yet. Add a signal and make treasury slightly more uncomfortable.</p>'
-                }
-              </div>
-              ${
-                invoice.escrowStatus === "releasable"
-                  ? `<button class="button button-primary release-button" data-release-id="${invoice.id}">Approve treasury move</button>`
-                  : ""
-              }
-            </article>
-          `;
-        })
-        .join("")
-    : "";
-
-  container.innerHTML = `
-    <div class="signal-panel-stack">
-      ${
-        fundedInvoices.length
-          ? `
-            <div class="signal-entry-grid">
-              ${signalForms}
-            </div>
-          `
-          : `
-            <div class="empty-state">
-              <h3>No signal theatre yet</h3>
-              <p>Fund a request first, then let market heat and operator notes fight for treasury attention.</p>
-            </div>
-          `
-      }
-      ${
-        activity.length
-          ? `
-            <div class="activity-list activity-list-tight">
-              ${activity
-                .map(
-                  (entry) => `
-                    <article class="activity-card">
-                      <div class="activity-topline">
-                        ${createStatusChip(entry.kind)}
-                        <span>${formatDateTime(entry.date)}</span>
-                      </div>
-                      <h3>${entry.title}</h3>
-                      <p>${entry.detail}</p>
-                    </article>
-                  `,
-                )
-                .join("")}
-            </div>
-          `
-          : ""
-      }
-    </div>
-  `;
-
-  container.querySelectorAll(".signal-form").forEach((form) => {
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const submitter = event.submitter;
-      const invoiceId = form.getAttribute("data-invoice-id") || "";
-      const invoice = getInvoiceById(invoiceId);
-      if (!invoice) {
-        showToast("Treasury request not found.");
-        return;
-      }
-
-      const formData = new FormData(form);
-      const sourceLabel = String(formData.get("sourceLabel") || "").trim();
-      const weight = getNumericAmount(formData.get("weight"));
-      const stance = submitter?.value === "no" ? "no" : "yes";
-
-      if (!sourceLabel) {
-        showToast("Add a signal source.");
-        return;
-      }
-
-      state.signals.unshift({
-        id: `sig_${Date.now()}`,
-        invoiceId,
-        stance,
-        weight,
-        sourceLabel,
-        createdAt: new Date().toISOString(),
-      });
-
-      saveState();
-      showToast(`${stance === "yes" ? "Bullish" : "Bearish"} signal added.`);
-      renderDashboard();
-    });
-  });
-
-  container.querySelectorAll(".release-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      const invoiceId = button.getAttribute("data-release-id") || "";
-      releaseInvoice(invoiceId);
-      showToast("Treasury move approved.");
-      renderDashboard();
-    });
-  });
-}
-
-function renderPayouts() {
-  const container = document.getElementById("recent-payouts");
-
-  if (!state.payouts.length) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <h3>No routing intent yet</h3>
-        <p>Approve a treasury move, then record how capital should flow after the signal dust settles.</p>
-      </div>
-    `;
-    return;
-  }
-
-  container.innerHTML = `
-    <div class="payout-list">
-      ${state.payouts
-        .map((payout) => {
-          const invoice = getInvoiceById(payout.invoiceId);
-          return `
-            <article class="payout-card ledger-card">
-              <div class="payout-head">
-                <div>
-                  <h3>${payout.label}</h3>
-                  <p class="supporting">${invoice ? invoice.clientName : payout.invoiceId}</p>
-                </div>
-                <span class="status-chip" data-status="released">Recorded</span>
-              </div>
-              <p class="amount">${formatCurrency(payout.amount)}</p>
-              <div class="invoice-meta">
-                <span>Recipient ${shortAddress(payout.recipientAddress)}</span>
-                <span>Mode ${(payout.mode || "fixed").replace("_", " ")}</span>
-                <span>Created ${formatDate(payout.createdAt)}</span>
-                <span>Post-decision routing intent</span>
-              </div>
-            </article>
-          `;
-        })
-        .join("")}
-    </div>
-  `;
-}
-
-function renderSplitForm() {
-  const form = document.getElementById("split-form");
-  const releasableInvoices = state.invoices.filter((invoice) => ["releasable", "released"].includes(invoice.escrowStatus));
-
-  if (!releasableInvoices.length) {
-    form.innerHTML = `
-      <div class="empty-state">
-        <h3>Need an unlocked treasury move</h3>
-        <p>Fund a request, stir the signal board, and approve the move before drafting a routing intent.</p>
-      </div>
-    `;
-    return;
-  }
-
-  const options = releasableInvoices
-    .map(
-      (invoice) => `
-        <option value="${invoice.id}">
-          ${invoice.clientName} - ${invoice.releaseConfidence}% - ${formatCurrency(invoiceRemaining(invoice.id), invoice.token)} left
-        </option>
-      `,
-    )
-    .join("");
-
-  form.innerHTML = `
-    <label>
-      Treasury move candidate
-      <select name="invoiceId">${options}</select>
-    </label>
-    <div class="split-row">
-      <label>
-        Destination wallet
-        <input name="recipientAddress" placeholder="0xF1c40000000000000000000000000000002E77" required />
-      </label>
-      <label>
-        Routing amount
-        <input name="amount" type="number" min="1" step="0.01" placeholder="250" required />
-      </label>
-    </div>
-    <div class="split-row">
-      <label>
-        Move label
-        <input name="label" placeholder="Live analytics reserve" required />
-      </label>
-      <label>
-        Routing style
-        <select name="mode">
-          <option value="fixed">Fixed amount</option>
-          <option value="percentage_hint">Percentage hint</option>
-        </select>
-      </label>
-    </div>
-    <div class="split-hint" id="split-hint"></div>
-    <div class="split-actions">
-      <button class="button button-primary" type="submit">Record routing intent</button>
-    </div>
-  `;
-
-  const select = form.elements.invoiceId;
-  const hint = document.getElementById("split-hint");
-
-  function updateHint() {
-    const invoiceId = select.value;
-    const invoice = getInvoiceById(invoiceId);
-    if (!invoice) return;
-    const remaining = invoiceRemaining(invoiceId);
-    hint.innerHTML = `
-      <strong>${invoice.milestoneTitle}</strong>
-      <p>Available to route: ${formatCurrency(remaining, invoice.token)} from ${invoice.clientName}. Suggested move: ${recommendationMeta(invoice.releaseRecommendation).label}.</p>
-    `;
-  }
-
-  select.addEventListener("change", updateHint);
-  updateHint();
-
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
     const formData = new FormData(form);
-    const invoiceId = String(formData.get("invoiceId") || "");
-    const invoice = getInvoiceById(invoiceId);
-    const amount = getNumericAmount(formData.get("amount"));
-    const remaining = invoiceRemaining(invoiceId);
-    const recipientAddress = String(formData.get("recipientAddress") || "").trim();
-    const label = String(formData.get("label") || "").trim();
-    const mode = String(formData.get("mode") || "fixed");
+    const title = String(formData.get("title") || "").trim();
+    const description = String(formData.get("description") || "").trim();
+    const category = formData.get("category");
+    const priceUSDC = Number(formData.get("price")) || 0;
 
-    if (!invoice) {
-      showToast("Select a treasury move candidate first.");
-      return;
-    }
+    if (!title) { showToast("Enter a service title."); return; }
+    if (!description) { showToast("Enter a service description."); return; }
+    if (priceUSDC <= 0) { showToast("Set a price greater than 0."); return; }
 
-    if (!["releasable", "released"].includes(invoice.escrowStatus)) {
-      showToast("This request is not unlocked for routing yet.");
-      return;
-    }
-
-    if (amount <= 0) {
-      showToast("Routing amount must be greater than zero.");
-      return;
-    }
-
-    if (!isAddress(recipientAddress)) {
-      showToast("Destination wallet must be a valid EVM address.");
-      return;
-    }
-
-    if (!label) {
-      showToast("Add a move label.");
-      return;
-    }
-
-    if (amount > remaining) {
-      showToast(`This routing intent exceeds the remaining ${formatCurrency(remaining, invoice.token)}.`);
-      return;
-    }
-
-    if (invoice.escrowStatus === "releasable") {
-      releaseInvoice(invoice.id);
-    }
-
-    state.payouts.unshift({
-      id: `pay_${Date.now()}`,
-      invoiceId,
-      recipientAddress,
-      amount,
-      status: "paid",
-      label,
-      createdAt: new Date().toISOString(),
-      mode,
+    const milestones = [];
+    let totalPercent = 0;
+    milestoneContainer.querySelectorAll(".milestone-form-item").forEach((item) => {
+      const id = item.dataset.id;
+      const name = String(formData.get(`ms_name_${id}`) || "").trim();
+      const percent = Number(formData.get(`ms_percent_${id}`)) || 0;
+      const desc = String(formData.get(`ms_desc_${id}`) || "").trim();
+      if (name && percent > 0) { milestones.push({ name, percent, description: desc }); totalPercent += percent; }
     });
 
-    saveState();
-    showToast("Routing intent recorded.");
-    renderDashboard();
+    if (milestones.length === 0) { showToast("Add at least one milestone."); return; }
+    if (totalPercent !== 100) { showToast(`Milestone percentages must sum to 100 (currently ${totalPercent}).`); return; }
+
+    connectWallet().then((addr) => {
+      const service = {
+        id: `svc_${Date.now()}`, sellerAddress: addr, title, description,
+        category: category || "other", priceUSDC, milestones, examples: [],
+        createdAt: new Date().toISOString(), orderCount: 0,
+      };
+      state.services.unshift(service);
+      saveState();
+      showToast(t("toast_published"));
+      window.location.hash = `#service?id=${service.id}`;
+    }).catch(() => showToast(t("toast_wallet_error")));
   });
 }
 
-async function syncWalletState() {
-  if (!window.ethereum) return;
+// ─── Page: My Orders (Buyer) ────────────────────────────────────
+function renderMyOrders() {
+  const container = document.getElementById("orders-content");
+  if (!container) return;
 
-  try {
-    const accounts = await rpcRequest("eth_accounts");
-    const chainHex = await rpcRequest("eth_chainId");
-    walletState.address = accounts[0] || "";
-    walletState.chainId = Number.parseInt(chainHex, 16) || 0;
-    walletState.connected = Boolean(walletState.address);
-  } catch {
-    walletState.address = "";
-    walletState.chainId = 0;
-    walletState.connected = false;
+  const address = walletState.address;
+  if (!address) {
+    container.innerHTML = `
+      <div class="panel empty-state">
+        <p class="card-label">${t("wallet_required")}</p>
+        <h2>${t("connect_wallet")}</h2>
+        <button class="button button-primary" style="margin-top:16px;" id="connect-wallet-btn">${t("connect_btn")}</button>
+      </div>`;
+    document.getElementById("connect-wallet-btn")?.addEventListener("click", async () => {
+      try { await connectWallet(); renderMyOrders(); } catch (err) { showToast(err.message); }
+    });
+    return;
+  }
+
+  const orders = getOrdersByBuyer(address);
+  if (orders.length === 0) {
+    container.innerHTML = `
+      <div class="panel empty-state">
+        <p class="card-label">${t("no_orders")}</p>
+        <h2>${t("no_orders_desc")}</h2>
+        <a class="button button-primary" style="margin-top:16px;" href="#browse">${t("cta_browse")}</a>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `<div class="order-list">${orders.map((o) => renderOrderCard(o, "buyer")).join("")}</div>`;
+  bindOrderActions(container, "buyer");
+}
+
+// ─── Page: My Sales (Seller) ─────────────────────────────────────
+function renderMySales() {
+  const container = document.getElementById("sales-content");
+  if (!container) return;
+
+  const address = walletState.address;
+  if (!address) {
+    container.innerHTML = `
+      <div class="panel empty-state">
+        <p class="card-label">${t("wallet_required")}</p>
+        <h2>${t("connect_wallet_sales")}</h2>
+        <button class="button button-primary" style="margin-top:16px;" id="connect-wallet-btn">${t("connect_btn")}</button>
+      </div>`;
+    document.getElementById("connect-wallet-btn")?.addEventListener("click", async () => {
+      try { await connectWallet(); renderMySales(); } catch (err) { showToast(err.message); }
+    });
+    return;
+  }
+
+  const orders = getOrdersBySeller(address);
+  if (orders.length === 0) {
+    container.innerHTML = `
+      <div class="panel empty-state">
+        <p class="card-label">${t("no_sales")}</p>
+        <h2>${t("no_sales_desc")}</h2>
+        <a class="button button-primary" style="margin-top:16px;" href="#create">${t("cta_sell")}</a>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `<div class="order-list">${orders.map((o) => renderOrderCard(o, "seller")).join("")}</div>`;
+  bindOrderActions(container, "seller");
+}
+
+// ─── Shared: Order Card ──────────────────────────────────────────
+function renderOrderCard(order, role) {
+  const service = getServiceById(order.serviceId);
+  const milestones = service ? service.milestones : [];
+  const progressSteps = order.milestoneStatuses.map((ms) => `<div class="order-progress-step is-${ms.status}"></div>`).join("");
+  const milestoneDetails = order.milestoneStatuses.map((ms, i) => {
+    const msDef = milestones[i];
+    const amount = getMilestoneAmount(order, i);
+    return `
+      <div class="milestone-item">
+        <div class="milestone-step is-${ms.status}">${i + 1}</div>
+        <div class="milestone-content">
+          <strong>${msDef ? msDef.name : `Step ${i + 1}`}</strong>
+          <span style="font-size:0.8rem;color:var(--text-muted);">${formatCurrency(amount)} — ${ms.status}</span>
+        </div>
+      </div>`;
+  }).join("");
+
+  let actions = "";
+  if (role === "buyer") {
+    order.milestoneStatuses.forEach((ms, i) => {
+      if (ms.status === "delivered") {
+        actions += `<button class="button button-primary action-confirm" data-order="${order.id}" data-ms="${i}" style="font-size:0.8rem;padding:8px 16px;">${t("confirm_release")}</button>
+        <button class="button button-secondary action-dispute" data-order="${order.id}" data-ms="${i}" style="font-size:0.8rem;padding:8px 16px;">${t("dispute")}</button>`;
+      }
+    });
+    if (order.status === "completed") actions = `<span style="color:var(--success);font-weight:700;">✓ ${t("completed")}</span>`;
+  } else {
+    order.milestoneStatuses.forEach((ms, i) => {
+      if (ms.status === "funded") {
+        actions += `<button class="button button-primary action-deliver" data-order="${order.id}" data-ms="${i}" style="font-size:0.8rem;padding:8px 16px;">${t("mark_delivered")}</button>`;
+      }
+      if (ms.status === "delivered") {
+        // Show auto-release if deliveredAt + 14 days has passed
+        const deliveredAt = ms.deliveredAt ? new Date(ms.deliveredAt).getTime() : 0;
+        const now = Date.now();
+        const daysSince = (now - deliveredAt) / (1000 * 60 * 60 * 24);
+        if (daysSince >= 14) {
+          actions += `<button class="button button-secondary action-auto-release" data-order="${order.id}" data-ms="${i}" style="font-size:0.8rem;padding:8px 16px;">Auto Release</button>`;
+        } else {
+          actions += `<span style="font-size:0.75rem;color:var(--text-muted);">Buyer confirm needed (${Math.ceil(14 - daysSince)}d left)</span>`;
+        }
+      }
+    });
+    if (order.status === "completed") actions = `<span style="color:var(--success);font-weight:700;">✓ ${t("completed")}</span>`;
+  }
+
+  return `
+    <div class="order-card panel">
+      <div class="order-head">
+        <div>
+          <p class="card-label">${order.serviceTitle}</p>
+          <h3 style="margin:4px 0;">${formatCurrency(order.totalAmount)}</h3>
+        </div>
+        <span class="status-chip" data-status="${order.status}">${order.status}</span>
+      </div>
+      <div class="order-progress">${progressSteps}</div>
+      <div class="milestone-list">${milestoneDetails}</div>
+      <div class="order-actions">${actions}</div>
+    </div>`;
+}
+
+function bindOrderActions(container, role) {
+  container.querySelectorAll(".action-confirm").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "...";
+      try {
+        await releaseMilestoneFromContract(btn.dataset.order, Number(btn.dataset.ms));
+        showToast(t("toast_released"));
+        render();
+      } catch (err) {
+        showToast(err.message || "Failed");
+        btn.disabled = false;
+        btn.textContent = t("confirm_release");
+      }
+    });
+  });
+  container.querySelectorAll(".action-dispute").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (disputeMilestone(btn.dataset.order, Number(btn.dataset.ms))) {
+        showToast(t("toast_disputed"));
+        render();
+      }
+    });
+  });
+  container.querySelectorAll(".action-deliver").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "...";
+      try {
+        await deliverMilestoneFromContract(btn.dataset.order, Number(btn.dataset.ms));
+        showToast(t("toast_delivered"));
+        render();
+      } catch (err) {
+        showToast(err.message || "Failed");
+        btn.disabled = false;
+        btn.textContent = t("mark_delivered");
+      }
+    });
+  });
+  container.querySelectorAll(".action-auto-release").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.textContent = "...";
+      try {
+        await autoReleaseMilestoneFromContract(btn.dataset.order, Number(btn.dataset.ms));
+        showToast("Auto-released (timeout)");
+        render();
+      } catch (err) {
+        showToast(err.message || "Failed");
+        btn.disabled = false;
+        btn.textContent = "Auto Release";
+      }
+    });
+  });
+}
+
+// ─── Page: Profile ───────────────────────────────────────────────
+function renderProfile(query) {
+  const container = document.getElementById("profile-content");
+  if (!container) return;
+
+  const address = walletState.address;
+  const displayAddress = query.get("address") || address;
+
+  if (!displayAddress) {
+    container.innerHTML = `
+      <div class="panel empty-state">
+        <p class="card-label">${t("wallet_required")}</p>
+        <h2>${t("connect_wallet_profile")}</h2>
+        <button class="button button-primary" style="margin-top:16px;" id="connect-wallet-btn">${t("connect_btn")}</button>
+      </div>`;
+    document.getElementById("connect-wallet-btn")?.addEventListener("click", async () => {
+      try { await connectWallet(); renderProfile(new URLSearchParams("")); } catch (err) { showToast(err.message); }
+    });
+    return;
+  }
+
+  const sellerServices = getServicesBySeller(displayAddress);
+  const buyerOrders = getOrdersByBuyer(displayAddress);
+  const sellerOrders = getOrdersBySeller(displayAddress);
+
+  const servicesHtml = sellerServices.length
+    ? sellerServices.map((s) => `<a class="service-card" href="#service?id=${s.id}" style="display:block;"><h3>${s.title}</h3><div class="service-meta"><span>${formatCurrency(s.priceUSDC)}</span><span>${s.orderCount} ${t("orders_count")}</span></div></a>`).join("")
+    : `<p style="color:var(--text-muted);">${t("no_services")}</p>`;
+
+  container.innerHTML = `
+    <div class="profile-header">
+      <div class="brand-mark" style="width:56px;height:56px;font-size:1.2rem;">${shortAddress(displayAddress).slice(0, 2)}</div>
+      <div>
+        <p class="card-label">${t("profile_title")}</p>
+        <div class="profile-address">${displayAddress}</div>
+      </div>
+    </div>
+    <div class="profile-stats">
+      <div class="profile-stat panel"><p class="card-label">${t("services")}</p><h3>${sellerServices.length}</h3></div>
+      <div class="profile-stat panel"><p class="card-label">${t("as_buyer")}</p><h3>${buyerOrders.length}</h3></div>
+      <div class="profile-stat panel"><p class="card-label">${t("as_seller")}</p><h3>${sellerOrders.length}</h3></div>
+      <div class="profile-stat panel"><p class="card-label">${t("completed")}</p><h3>${[...buyerOrders, ...sellerOrders].filter((o) => o.status === "completed").length}</h3></div>
+    </div>
+    <div style="margin-top:24px;">
+      <p class="card-label" style="margin-bottom:12px;">${t("listed_services")}</p>
+      <div class="service-grid">${servicesHtml}</div>
+    </div>`;
+}
+
+// ─── Animations ───────────────────────────────────────────────────
+let scrollObserver = null;
+let wordRotateInterval = null;
+
+function initAnimations() {
+  // Scroll-triggered animations
+  if (scrollObserver) scrollObserver.disconnect();
+  scrollObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("is-visible");
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll(".animate-on-scroll, .animate-stagger").forEach((el) => {
+    scrollObserver.observe(el);
+  });
+
+  // Word rotation
+  if (wordRotateInterval) clearInterval(wordRotateInterval);
+  const wordRotateEl = document.getElementById("hero-word-rotate");
+  if (wordRotateEl) {
+    const words = ["即时释放", "安全托管", "闪电结算", "零信任"];
+    let wordIndex = 0;
+    wordRotateEl.textContent = words[0];
+    wordRotateEl.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+
+    wordRotateInterval = setInterval(() => {
+      wordRotateEl.style.opacity = "0";
+      wordRotateEl.style.transform = "translateY(-8px)";
+      setTimeout(() => {
+        wordIndex = (wordIndex + 1) % words.length;
+        wordRotateEl.textContent = words[wordIndex];
+        wordRotateEl.style.transform = "translateY(8px)";
+        requestAnimationFrame(() => {
+          wordRotateEl.style.opacity = "1";
+          wordRotateEl.style.transform = "translateY(0)";
+        });
+      }, 300);
+    }, 2500);
+  }
+
+  // Stats marquee
+  const marqueeEl = document.getElementById("stats-marquee");
+  if (marqueeEl) {
+    const stats = [
+      { value: "2% 手续费", label: "行业最低", company: "FEE" },
+      { value: "14 天", label: "自动释放", company: "PROTECTION" },
+      { value: "30 天", label: "争议超时", company: "SECURITY" },
+      { value: "1 USDC", label: "最低订单", company: "MINIMUM" },
+      { value: "Base", label: "超低 Gas", company: "NETWORK" },
+    ];
+    // Duplicate for seamless loop
+    const html = [...stats, ...stats].map(s => `
+      <div style="display:inline-flex;align-items:baseline;gap:16px;">
+        <span style="font-size:2rem;font-weight:800;background:linear-gradient(135deg,var(--gradient-start),var(--gradient-end));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">${s.value}</span>
+        <span style="font-size:0.85rem;color:var(--muted-foreground);">
+          ${s.label}
+          <span style="display:block;font-size:0.7rem;font-family:var(--font-mono);margin-top:2px;opacity:0.6;">${s.company}</span>
+        </span>
+      </div>
+    `).join("");
+    marqueeEl.innerHTML = html;
   }
 }
 
+// ─── Init ────────────────────────────────────────────────────────
 window.addEventListener("hashchange", render);
-window.addEventListener("DOMContentLoaded", async () => {
-  await syncWalletState();
-  render();
-});
-
-if (window.ethereum) {
-  window.ethereum.on("accountsChanged", (accounts) => {
-    walletState.address = accounts[0] || "";
-    walletState.connected = Boolean(walletState.address);
-    render();
-  });
-
-  window.ethereum.on("chainChanged", (chainHex) => {
-    walletState.chainId = Number.parseInt(chainHex, 16) || 0;
-    render();
-  });
-}
+setupEventListeners();
+render();

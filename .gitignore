@@ -1,12 +1,19 @@
-.chrome-headless/
+node_modules/
+.env
+.env.*
+cache/
+artifacts/
+typechain-types/
+coverage/
+coverage.json
+
+# Temp / generated
 .chrome-headless-http/
-output/
-data/
-config/
-*.log
-Thumbs.db
-Desktop.ini
-CLAUDE.md
 terminal-practice/
+output/
 __pycache__/
-*.pyc
+
+# v0-ui Next.js
+v0-ui/.next/
+v0-ui/.env*
+v0-ui/node_modules/
