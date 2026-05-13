@@ -477,4 +477,356 @@ describe("StableFlowEscrow V4", () => {
       assert.equal(await u.balanceOf(await e.getAddress()), ORDER_AMOUNT);
     });
   });
+
+  describe("Edge Cases & Input Validation", () => {
+    it("rejects createOrder with zero address seller", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await assert.rejects(
+        () => e.connect(buyer).createOrder(ethers.ZeroAddress, ORDER_AMOUNT, [10000]),
+        /Invalid seller/
+      );
+    });
+
+    it("rejects createOrder with empty milestones", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await assert.rejects(
+        () => e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, []),
+        /Invalid milestone count/
+      );
+    });
+
+    it("rejects createOrder with >10 milestones", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      const percents = Array(11).fill(910); // 11 * 910 = 10010
+      await assert.rejects(
+        () => e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, percents),
+        /Invalid milestone count/
+      );
+    });
+
+    it("rejects milestone percent of 0", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await assert.rejects(
+        () => e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [5000, 0, 5000]),
+        /Milestone percent must be > 0/
+      );
+    });
+
+    it("rejects duplicate deliverMilestone", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [10000]);
+      await e.connect(seller).deliverMilestone(0, 0);
+      await assert.rejects(
+        () => e.connect(seller).deliverMilestone(0, 0),
+        /Not in Funded status/
+      );
+    });
+
+    it("rejects release from non-Delivered status", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [10000]);
+      await assert.rejects(
+        () => e.connect(buyer).releaseMilestone(0, 0),
+        /Not in Delivered status/
+      );
+    });
+
+    it("rejects release on completed order", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [10000]);
+      await e.connect(seller).deliverMilestone(0, 0);
+      await e.connect(buyer).releaseMilestone(0, 0);
+      await assert.rejects(
+        () => e.connect(buyer).releaseMilestone(0, 0),
+        /Order completed/
+      );
+    });
+
+    it("rejects deliver on completed order", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [5000, 5000]);
+      await e.connect(seller).deliverMilestone(0, 0);
+      await e.connect(buyer).releaseMilestone(0, 0);
+      await e.connect(seller).deliverMilestone(0, 1);
+      await e.connect(buyer).releaseMilestone(0, 1);
+      await assert.rejects(
+        () => e.connect(seller).deliverMilestone(0, 0),
+        /Order completed/
+      );
+    });
+
+    it("rejects dispute on non-Delivered milestone", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [10000]);
+      await assert.rejects(
+        () => e.connect(buyer).disputeMilestone(0, 0),
+        /Not in Delivered status/
+      );
+    });
+
+    it("dispute does not block other milestones", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [5000, 5000]);
+      await e.connect(seller).deliverMilestone(0, 0);
+      await e.connect(buyer).disputeMilestone(0, 0);
+      await e.connect(seller).deliverMilestone(0, 1);
+      await e.connect(buyer).releaseMilestone(0, 1);
+      assert.equal((await e.getMilestone(0, 1)).status, 3n); // Released
+    });
+
+    it("rejects resolveDispute with non-buyer/seller recipient", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await e.connect(buyer).disputeMilestone(0, 0);
+      await assert.rejects(
+        () => e.connect(arbitrator).resolveDispute(0, 0, arbitrator.address, 5000),
+        /Recipient must be buyer or seller/
+      );
+    });
+
+    it("rejects resolveDispute with percent > 10000", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await e.connect(buyer).disputeMilestone(0, 0);
+      await assert.rejects(
+        () => e.connect(arbitrator).resolveDispute(0, 0, seller.address, 10001),
+        /Percent exceeds 100%/
+      );
+    });
+
+    it("rejects resolveDispute on non-disputed milestone", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await assert.rejects(
+        () => e.connect(arbitrator).resolveDispute(0, 0, seller.address, 5000),
+        /Not disputed/
+      );
+    });
+
+    it("rejects resolveDispute from non-arbitrator", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await e.connect(buyer).disputeMilestone(0, 0);
+      await assert.rejects(
+        () => e.connect(buyer).resolveDispute(0, 0, seller.address, 5000),
+        /Not arbitrator/
+      );
+    });
+
+    it("rejects finalizeResolution from third party", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await e.connect(buyer).disputeMilestone(0, 0);
+      await e.connect(arbitrator).resolveDispute(0, 0, seller.address, 5000);
+      await hp.send("evm_increaseTime", [TWO_DAYS]);
+      await hp.send("evm_mine");
+      await assert.rejects(
+        () => e.connect(arbitrator).finalizeResolution(0, 0),
+        /Only buyer or seller/
+      );
+    });
+
+    it("rejects appeal after objection period", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await e.connect(buyer).disputeMilestone(0, 0);
+      await e.connect(arbitrator).resolveDispute(0, 0, seller.address, 5000);
+      await hp.send("evm_increaseTime", [TWO_DAYS]);
+      await hp.send("evm_mine");
+      await assert.rejects(
+        () => e.connect(buyer).appealResolution(0, 0),
+        /Objection period already ended/
+      );
+    });
+
+    it("rejects claimTimeoutRefund on non-disputed milestone", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await assert.rejects(
+        () => e.connect(buyer).claimTimeoutRefund(0, 0),
+        /Not disputed/
+      );
+    });
+
+    it("rejects autoRelease from wrong status", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [10000]);
+      await assert.rejects(
+        () => e.connect(seller).autoReleaseMilestone(0, 0),
+        /Not in Delivered status/
+      );
+    });
+
+    it("rejects non-seller autoRelease", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await hp.send("evm_increaseTime", [FOURTEEN_DAYS]);
+      await hp.send("evm_mine");
+      await assert.rejects(
+        () => e.connect(buyer).autoReleaseMilestone(0, 0),
+        /Only seller can call/
+      );
+    });
+
+    it("rejects dispute from third party", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await assert.rejects(
+        () => e.connect(arbitrator).disputeMilestone(0, 0),
+        /Only buyer or seller/
+      );
+    });
+
+    it("creates order with 10 milestones (max)", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      const percents = Array(10).fill(1000); // 10 * 1000 = 10000
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, percents);
+      const order = await e.getOrder(0);
+      assert.equal(order.milestoneCount, 10n);
+    });
+
+    it("rejects invalid milestone index", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [10000]);
+      await e.connect(seller).deliverMilestone(0, 0);
+      await assert.rejects(
+        () => e.connect(buyer).releaseMilestone(0, 5),
+        /Invalid milestone index/
+      );
+    });
+
+    it("rejects invalid order ID for getOrder", async () => {
+      const { escrow: e } = await deployFresh();
+      const order = await e.getOrder(999);
+      assert.equal(order.buyer, ethers.ZeroAddress);
+    });
+
+    it("canAutoRelease returns false before timeout", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      assert.equal(await e.canAutoRelease(0, 0), false);
+    });
+
+    it("canAutoRelease returns true after timeout", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await hp.send("evm_increaseTime", [FOURTEEN_DAYS]);
+      await hp.send("evm_mine");
+      assert.equal(await e.canAutoRelease(0, 0), true);
+    });
+
+    it("canClaimTimeoutRefund returns true after 30 days", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await e.connect(buyer).disputeMilestone(0, 0);
+      await hp.send("evm_increaseTime", [THIRTY_DAYS]);
+      await hp.send("evm_mine");
+      assert.equal(await e.canClaimTimeoutRefund(0, 0), true);
+    });
+
+    it("canFinalizeResolution returns true after objection period", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await e.connect(buyer).disputeMilestone(0, 0);
+      await e.connect(arbitrator).resolveDispute(0, 0, seller.address, 5000);
+      await hp.send("evm_increaseTime", [TWO_DAYS]);
+      await hp.send("evm_mine");
+      assert.equal(await e.canFinalizeResolution(0, 0), true);
+    });
+
+    it("getMilestones returns all milestones", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await u.connect(buyer).approve(await e.getAddress(), ORDER_AMOUNT);
+      await e.connect(buyer).createOrder(seller.address, ORDER_AMOUNT, [3000, 4000, 3000]);
+      const mss = await e.getMilestones(0);
+      assert.equal(mss.length, 3);
+      assert.equal(mss[0].amount, ethers.parseUnits("150", 6));
+      assert.equal(mss[1].amount, ethers.parseUnits("200", 6));
+      assert.equal(mss[2].amount, ethers.parseUnits("150", 6));
+    });
+
+    it("resolve 100% to buyer (full refund)", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await e.connect(buyer).disputeMilestone(0, 0);
+      await e.connect(arbitrator).resolveDispute(0, 0, buyer.address, 10000);
+
+      await hp.send("evm_increaseTime", [TWO_DAYS]);
+      await hp.send("evm_mine");
+
+      const bBefore = await u.balanceOf(buyer.address);
+      await e.connect(buyer).finalizeResolution(0, 0);
+      const bAfter = await u.balanceOf(buyer.address);
+
+      // Buyer gets full milestone amount back (250 USDC)
+      assert.equal(bAfter - bBefore, ethers.parseUnits("250", 6));
+    });
+
+    it("resolve 100% to seller (full payment minus fee)", async () => {
+      const { usdc: u, escrow: e } = await deployFresh();
+      await createAndDeliver(u, e);
+      await e.connect(buyer).disputeMilestone(0, 0);
+      await e.connect(arbitrator).resolveDispute(0, 0, seller.address, 10000);
+
+      await hp.send("evm_increaseTime", [TWO_DAYS]);
+      await hp.send("evm_mine");
+
+      const sBefore = await u.balanceOf(seller.address);
+      await e.connect(seller).finalizeResolution(0, 0);
+      const sAfter = await u.balanceOf(seller.address);
+
+      // 250 - 2% fee = 245
+      assert.equal(sAfter - sBefore, ethers.parseUnits("245", 6));
+    });
+
+    it("setArbitrator rejects zero address", async () => {
+      const { escrow: e } = await deployFresh();
+      await assert.rejects(
+        () => e.setArbitrator(ethers.ZeroAddress),
+        /Invalid address/
+      );
+    });
+
+    it("setPlatformWallet rejects zero address", async () => {
+      const { escrow: e } = await deployFresh();
+      await assert.rejects(
+        () => e.setPlatformWallet(ethers.ZeroAddress),
+        /Invalid address/
+      );
+    });
+
+    it("rejects non-owner setPlatformFee", async () => {
+      const { escrow: e } = await deployFresh();
+      await assert.rejects(
+        () => e.connect(buyer).setPlatformFee(300)
+      );
+    });
+
+    it("rejects non-owner setArbitrator", async () => {
+      const { escrow: e } = await deployFresh();
+      await assert.rejects(
+        () => e.connect(buyer).setArbitrator(arbitrator.address)
+      );
+    });
+
+    it("rejects non-owner setPlatformWallet", async () => {
+      const { escrow: e } = await deployFresh();
+      await assert.rejects(
+        () => e.connect(buyer).setPlatformWallet(buyer.address)
+      );
+    });
+  });
 });
