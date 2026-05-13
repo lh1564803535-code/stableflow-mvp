@@ -42,6 +42,21 @@ stableflow-mvp/
 └── .env                         — 私钥和平台钱包（不进 git）
 ```
 
+## 在线体验
+
+**👉 [点击打开 StableFlow](https://lh1564803535-code.github.io/stableflow-mvp/)**
+
+> 打开即可使用，无需安装。连接钱包后可体验完整流程（合约尚未部署到测试网，链上操作暂不可用，UI 浏览和创建服务可正常演示）。
+
+<details>
+<summary>打不开？点这里查看解决方案</summary>
+
+1. 确认链接正确：`https://lh1564803535-code.github.io/stableflow-mvp/`
+2. 如果显示 404，GitHub Pages 可能还在部署中，等 1-2 分钟刷新
+3. 如果持续打不开，可能是网络问题，试试挂梯子
+
+</details>
+
 ## 快速开始
 
 ### 合约开发
@@ -100,6 +115,16 @@ npm run dev
 - [CHANGELOG_V4.md](./CHANGELOG_V4.md) — V3→V4 安全修复 + 新功能完整报告
 - [CLAUDE.md](./CLAUDE.md) — 合约开发环境说明
 - [v0-ui/CLAUDE.md](./v0-ui/CLAUDE.md) — 前端项目说明
+
+## 部署 GitHub Pages（维护者操作）
+
+如果在线体验链接打不开，需要在 GitHub 仓库设置中开启 Pages：
+
+1. 打开 https://github.com/lh1564803535-code/stableflow-mvp/settings/pages
+2. **Source** 选 `Deploy from a branch`
+3. **Branch** 选 `main`，文件夹选 `/ (root)`
+4. 点 **Save**
+5. 等 1-2 分钟，访问 https://lh1564803535-code.github.io/stableflow-mvp/
 
 ## 安全特性
 
