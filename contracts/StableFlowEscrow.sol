@@ -425,9 +425,9 @@ contract StableFlowEscrow is ReentrancyGuard, Ownable, Pausable {
         address recipient = ms.pendingRecipient;
         address otherParty = (recipient == order.seller) ? order.buyer : order.seller;
 
-        // Transfer to recipient
+        // Transfer to recipient — fee computed in single expression to avoid divide-before-multiply
         if (recipient == order.seller) {
-            uint256 fee = (recipientAmount * platformFeeBps) / 10000;
+            uint256 fee = (msAmount * ms.pendingPercent * platformFeeBps) / 100000000;
             usdc.safeTransfer(recipient, recipientAmount - fee);
             if (fee > 0) usdc.safeTransfer(platformWallet, fee);
         } else {
