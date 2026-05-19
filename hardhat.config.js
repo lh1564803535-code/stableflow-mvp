@@ -1,6 +1,7 @@
 import "dotenv/config";
 import "@nomicfoundation/hardhat-node-test-runner";
 import "@nomicfoundation/hardhat-ethers";
+import "@nomicfoundation/hardhat-verify";
 
 export default {
   solidity: {
@@ -16,6 +17,21 @@ export default {
       chainId: 84532,
       accounts: process.env.PRIVATE_KEY?.startsWith("0x") ? [process.env.PRIVATE_KEY] : [],
     },
+  },
+  etherscan: {
+    apiKey: {
+      baseSepolia: process.env.BASESCAN_API_KEY || "",
+    },
+    customChains: [
+      {
+        network: "baseSepolia",
+        chainId: 84532,
+        urls: {
+          apiURL: "https://api-sepolia.basescan.org/api",
+          browserURL: "https://sepolia.basescan.org",
+        },
+      },
+    ],
   },
   test: {
     type: "node",

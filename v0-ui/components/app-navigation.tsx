@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { ListOrdered, Plus, Store } from "lucide-react";
+import { ListOrdered, Plus, Store, BookOpen } from "lucide-react";
 
 const navItems = [
   { name: "Browse", href: "/browse", icon: Store },
   { name: "Orders", href: "/orders", icon: ListOrdered },
   { name: "Create", href: "/create", icon: Plus },
+  { name: "Docs", href: "/docs", icon: BookOpen },
 ];
 
 export function AppNavigation() {
